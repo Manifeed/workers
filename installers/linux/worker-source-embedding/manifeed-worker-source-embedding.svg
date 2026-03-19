@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Manifeed worker">
+  <rect width="128" height="128" rx="24" fill="#102a43"/>
+  <rect x="16" y="16" width="96" height="96" rx="18" fill="#1f7a8c"/>
+  <path d="M28 86V42h14l22 27 22-27h14v44H84V63L64 87 44 63v23H28z" fill="#f0f4f8"/>
+</svg>

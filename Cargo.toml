@@ -1,0 +1,8 @@
+[workspace]
+members = [
+  "manifeed-worker-common",
+  "worker-rss",
+  "worker-source-embedding",
+  "worker-source-embedding-desktop",
+]
+resolver = "2"
