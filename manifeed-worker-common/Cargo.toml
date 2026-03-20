@@ -17,8 +17,3 @@ sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["sync"] }
 uuid = { version = "1", features = ["serde", "v4"] }
-
-[dev-dependencies]
-tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-wiremock = "0.6"

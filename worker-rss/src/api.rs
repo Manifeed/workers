@@ -204,7 +204,11 @@ impl RssGateway for HttpRssGateway {
         let token = self.bearer_token().await?;
         let state = state.sanitized();
         self.api_client
-            .post_json::<_, serde_json::Value>("/workers/rss/state", &state, Some(&token))
+            .post_json::<_, serde_json::Value>(
+                "/workers/rss/state",
+                &state,
+                Some(&token),
+            )
             .await?;
         Ok(())
     }
