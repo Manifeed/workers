@@ -117,7 +117,10 @@ pub struct RuntimeProbe {
     pub notes: Vec<String>,
 }
 
-pub fn probe_system(preferred_backend: ExecutionBackend, explicit_ort_dylib_path: Option<&Path>) -> RuntimeProbe {
+pub fn probe_system(
+    preferred_backend: ExecutionBackend,
+    explicit_ort_dylib_path: Option<&Path>,
+) -> RuntimeProbe {
     let os = env::consts::OS.to_string();
     let arch = env::consts::ARCH.to_string();
     let (distro_id, distro_name, distro_version) = read_os_release();
@@ -164,8 +167,13 @@ pub fn probe_system(preferred_backend: ExecutionBackend, explicit_ort_dylib_path
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>();
 
-    let (recommended_backend, recommended_runtime_bundle) =
-        recommend_runtime(preferred_backend, &arch, &gpu_vendors, has_cuda_driver, has_vulkan_loader);
+    let (recommended_backend, recommended_runtime_bundle) = recommend_runtime(
+        preferred_backend,
+        &arch,
+        &gpu_vendors,
+        has_cuda_driver,
+        has_vulkan_loader,
+    );
 
     RuntimeProbe {
         os,
@@ -216,9 +224,7 @@ pub fn ensure_ort_runtime_loaded(explicit_ort_dylib_path: Option<&Path>) -> Resu
         ))
     });
 
-    loaded
-        .clone()
-        .map_err(EmbeddingWorkerError::Runtime)
+    loaded.clone().map_err(EmbeddingWorkerError::Runtime)
 }
 
 pub fn execution_providers(
@@ -287,10 +293,7 @@ fn recommend_runtime(
             }
         }
         ExecutionBackend::Auto => {
-            if arch == "x86_64"
-                && gpu_vendors.contains(&GpuVendor::Nvidia)
-                && has_cuda_driver
-            {
+            if arch == "x86_64" && gpu_vendors.contains(&GpuVendor::Nvidia) && has_cuda_driver {
                 return (ExecutionBackend::Cuda, RuntimeBundle::Cuda12);
             }
             (ExecutionBackend::Cpu, RuntimeBundle::None)
@@ -387,12 +390,9 @@ fn detect_gpu_vendors() -> Vec<GpuVendor> {
 
 fn detect_render_node() -> bool {
     match fs::read_dir("/dev/dri") {
-        Ok(entries) => entries.flatten().any(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with("renderD")
-        }),
+        Ok(entries) => entries
+            .flatten()
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("renderD")),
         Err(_) => false,
     }
 }

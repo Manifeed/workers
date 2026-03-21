@@ -164,7 +164,10 @@ impl HttpFeedFetcher {
         if is_transient_status(response_status) {
             return Err(FetchAttemptError::transient(
                 Some(response_status.as_u16()),
-                format!("Transient HTTP status {} for {}", response_status, feed.feed_url),
+                format!(
+                    "Transient HTTP status {} for {}",
+                    response_status, feed.feed_url
+                ),
             ));
         }
 
@@ -204,7 +207,12 @@ impl HttpFeedFetcher {
         );
         let reserved_at = {
             let mut next_request_at = self.host_next_request_at.lock().await;
-            reserve_request_slot(&mut next_request_at, &key, tokio::time::Instant::now(), interval)
+            reserve_request_slot(
+                &mut next_request_at,
+                &key,
+                tokio::time::Instant::now(),
+                interval,
+            )
         };
         let now = tokio::time::Instant::now();
         if reserved_at > now {

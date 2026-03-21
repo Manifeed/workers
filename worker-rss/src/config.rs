@@ -1,9 +1,8 @@
 use std::env;
 use std::fmt::Display;
-use std::path::PathBuf;
 use std::str::FromStr;
 
-use manifeed_worker_common::{WorkerAuthConfig, WorkerError, WorkerType};
+use manifeed_worker_common::{resolve_worker_name, WorkerAuthConfig, WorkerError, WorkerType};
 
 use crate::error::Result;
 
@@ -64,9 +63,11 @@ impl RssWorkerConfig {
             )?,
             auth: WorkerAuthConfig {
                 worker_type: WorkerType::RssScrapper,
-                identity_dir: optional_env_path("MANIFEED_RSS_IDENTITY_DIR"),
-                enrollment_token: optional_env_string("MANIFEED_RSS_ENROLLMENT_TOKEN"),
-                worker_version: env!("CARGO_PKG_VERSION").to_string(),
+                api_key: required_env_string("MANIFEED_WORKER_API_KEY")?,
+                worker_name: resolve_worker_name(
+                    optional_env_string("MANIFEED_WORKER_NAME"),
+                    WorkerType::RssScrapper,
+                ),
             },
         })
     }
@@ -79,8 +80,10 @@ fn optional_env_string(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn optional_env_path(key: &str) -> Option<PathBuf> {
-    optional_env_string(key).map(PathBuf::from)
+fn required_env_string(key: &str) -> Result<String> {
+    optional_env_string(key).ok_or_else(|| {
+        WorkerError::Config(format!("missing required environment variable {key}")).into()
+    })
 }
 
 fn env_or_default<T>(key: &str, default: T) -> Result<T>

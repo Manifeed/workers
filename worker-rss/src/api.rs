@@ -1,12 +1,10 @@
 use std::time::Duration;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use manifeed_worker_common::{
     ApiClient, WorkerAuthenticator, WorkerError, WorkerTaskClaim, WorkerTaskClaimRequest,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tracing::warn;
 
@@ -47,7 +45,7 @@ struct RssTaskFailRequest {
 #[derive(Clone)]
 pub struct HttpRssGateway {
     api_client: ApiClient,
-    authenticator: Arc<Mutex<WorkerAuthenticator>>,
+    authenticator: WorkerAuthenticator,
     lease_seconds: u32,
 }
 
@@ -55,14 +53,17 @@ impl HttpRssGateway {
     pub fn new(config: &RssWorkerConfig) -> Result<Self> {
         Ok(Self {
             api_client: ApiClient::new(config.api_url.clone())?,
-            authenticator: Arc::new(Mutex::new(WorkerAuthenticator::new(config.auth.clone())?)),
+            authenticator: WorkerAuthenticator::new(config.auth.clone())?,
             lease_seconds: config.lease_seconds,
         })
     }
 
-    async fn bearer_token(&self) -> Result<String> {
-        let mut authenticator = self.authenticator.lock().await;
-        Ok(authenticator.ensure_session(&self.api_client).await?)
+    fn bearer_token(&self) -> &str {
+        self.authenticator.bearer_token()
+    }
+
+    fn worker_name(&self) -> &str {
+        self.authenticator.worker_name()
     }
 
     fn parse_claim(task: WorkerTaskClaim) -> Result<ClaimedRssTask> {
@@ -79,7 +80,6 @@ impl HttpRssGateway {
     }
 
     async fn claim_once(&self, count: usize) -> Result<Vec<ClaimedRssTask>> {
-        let token = self.bearer_token().await?;
         let tasks = self
             .api_client
             .post_json::<_, Vec<WorkerTaskClaim>>(
@@ -88,7 +88,8 @@ impl HttpRssGateway {
                     count: count.min(u32::MAX as usize) as u32,
                     lease_seconds: self.lease_seconds,
                 },
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
         tasks.into_iter().map(Self::parse_claim).collect()
@@ -100,7 +101,6 @@ impl HttpRssGateway {
         execution_id: u64,
         results: &[RawFeedScrapeResult],
     ) -> Result<()> {
-        let token = self.bearer_token().await?;
         self.api_client
             .post_json::<_, serde_json::Value>(
                 "/workers/rss/complete",
@@ -113,14 +113,14 @@ impl HttpRssGateway {
                         .map(|payload| RssResultEvent { payload })
                         .collect(),
                 },
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
         Ok(())
     }
 
     async fn fail_once(&self, task_id: u64, execution_id: u64, error_message: &str) -> Result<()> {
-        let token = self.bearer_token().await?;
         self.api_client
             .post_json::<_, serde_json::Value>(
                 "/workers/rss/fail",
@@ -129,15 +129,18 @@ impl HttpRssGateway {
                     execution_id,
                     error_message: error_message.to_string(),
                 },
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
         Ok(())
     }
 
     fn should_retry(error: &RssWorkerError) -> bool {
-        matches!(error, RssWorkerError::Common(WorkerError::Http(_)) | RssWorkerError::Http(_))
-            && error.is_network_error()
+        matches!(
+            error,
+            RssWorkerError::Common(WorkerError::Http(_)) | RssWorkerError::Http(_)
+        ) && error.is_network_error()
     }
 }
 
@@ -201,13 +204,13 @@ impl RssGateway for HttpRssGateway {
     }
 
     async fn update_state(&self, state: RssGatewayState) -> Result<()> {
-        let token = self.bearer_token().await?;
         let state = state.sanitized();
         self.api_client
             .post_json::<_, serde_json::Value>(
                 "/workers/rss/state",
                 &state,
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
         Ok(())

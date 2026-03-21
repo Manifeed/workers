@@ -71,10 +71,7 @@ struct WorkerStatusInner {
 }
 
 impl WorkerStatusHandle {
-    pub fn new(
-        path: impl Into<PathBuf>,
-        execution_backend: ExecutionBackend,
-    ) -> Result<Self> {
+    pub fn new(path: impl Into<PathBuf>, execution_backend: ExecutionBackend) -> Result<Self> {
         let now = Utc::now();
         let pid = std::process::id();
         let path = path.into();

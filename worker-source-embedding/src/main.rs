@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use manifeed_worker_common::{ApiClient, WorkerAuthenticator};
-use serde_json::json;
 use tracing::{error, info, warn};
 use worker_source_embedding::api::HttpEmbeddingGateway;
 use worker_source_embedding::config::EmbeddingWorkerConfig;
@@ -15,7 +13,6 @@ const RUN_ERROR_SLEEP_SECONDS: u64 = 3;
 enum WorkerCommand {
     Run,
     Probe,
-    Enroll,
 }
 
 #[tokio::main]
@@ -32,7 +29,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&probe)?);
             Ok(())
         }
-        WorkerCommand::Enroll => enroll_worker(config).await,
     }
 }
 
@@ -43,10 +39,16 @@ async fn run_worker(config: EmbeddingWorkerConfig) -> Result<(), Box<dyn std::er
 
     let gateway = HttpEmbeddingGateway::new(&config, status.clone())?;
     let embedder = HuggingFaceOnnxModelManager::new(&config, status.clone())?;
-    let mut worker = EmbeddingWorker::new(gateway, embedder, config.inference_batch_size, status.clone());
+    let mut worker = EmbeddingWorker::new(
+        gateway,
+        embedder,
+        config.inference_batch_size,
+        status.clone(),
+    );
 
     info!(
         api_url = %config.api_url,
+        worker_name = %config.auth.worker_name,
         execution_backend = %config.execution_backend,
         recommended_execution_backend = %probe.recommended_backend,
         recommended_runtime_bundle = %probe.recommended_runtime_bundle,
@@ -84,32 +86,12 @@ async fn run_worker(config: EmbeddingWorkerConfig) -> Result<(), Box<dyn std::er
     }
 }
 
-async fn enroll_worker(config: EmbeddingWorkerConfig) -> Result<(), Box<dyn std::error::Error>> {
-    let api_client = ApiClient::new(config.api_url.clone())?;
-    let mut authenticator = WorkerAuthenticator::new(config.auth.clone())?;
-    authenticator.ensure_session(&api_client).await?;
-
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({
-            "status": "enrolled",
-            "worker_type": "source_embedding",
-            "device_id": authenticator.device_id(),
-            "identity_summary": authenticator.identity_summary()?,
-            "api_url": config.api_url,
-        }))?
-    );
-
-    Ok(())
-}
-
 fn parse_command() -> Result<WorkerCommand, Box<dyn std::error::Error>> {
     match std::env::args().nth(1).as_deref() {
         None | Some("run") => Ok(WorkerCommand::Run),
         Some("probe") => Ok(WorkerCommand::Probe),
-        Some("enroll") => Ok(WorkerCommand::Enroll),
         Some("--help") | Some("-h") | Some("help") => {
-            println!("usage: worker-source-embedding [run|probe|enroll]");
+            println!("usage: worker-source-embedding [run|probe]");
             std::process::exit(0);
         }
         Some(other) => Err(format!("unknown command: {other}").into()),

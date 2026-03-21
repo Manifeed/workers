@@ -192,9 +192,7 @@ impl ClaimedFeedQueue {
         let task = self
             .tasks
             .remove(&completed_feed.scheduled_feed.task_key)
-            .ok_or_else(|| {
-                RssWorkerError::Runtime("missing completed task state".to_string())
-            })?;
+            .ok_or_else(|| RssWorkerError::Runtime("missing completed task state".to_string()))?;
         Ok(Some(CompletedTask {
             task_key: completed_feed.scheduled_feed.task_key,
             results: task.into_results()?,
@@ -218,7 +216,11 @@ impl ClaimedFeedQueue {
             .active_by_host
             .values()
             .find_map(|feeds| feeds.first())
-            .or_else(|| self.pending_by_host.values().find_map(|feeds| feeds.front()));
+            .or_else(|| {
+                self.pending_by_host
+                    .values()
+                    .find_map(|feeds| feeds.front())
+            });
         let connection_state = if pending_completion_count > 0 && self.active_by_host.is_empty() {
             "committing"
         } else {

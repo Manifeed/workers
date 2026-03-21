@@ -58,11 +58,7 @@ where
         let mut claimed_any_tasks = false;
 
         loop {
-            reconcile_state_updates(
-                &mut state_join_set,
-                &mut pending_state,
-                &self.gateway,
-            );
+            reconcile_state_updates(&mut state_join_set, &mut pending_state, &self.gateway);
             drain_completion_acks(
                 &mut completion_join_set,
                 &mut pending_completion_count,
@@ -70,9 +66,9 @@ where
             )?;
 
             if should_claim {
-                let available_task_slots =
-                    self.max_claimed_tasks
-                        .saturating_sub(claimed_feeds.task_count() + pending_completion_count);
+                let available_task_slots = self
+                    .max_claimed_tasks
+                    .saturating_sub(claimed_feeds.task_count() + pending_completion_count);
                 if available_task_slots > 0 {
                     let claimed_tasks = self.gateway.claim(available_task_slots).await?;
                     if !claimed_tasks.is_empty() {
@@ -97,7 +93,11 @@ where
                 let Some(scheduled_feed) = claimed_feeds.try_start_next() else {
                     break;
                 };
-                spawn_fetch(&mut fetch_join_set, Arc::clone(&self.fetcher), scheduled_feed);
+                spawn_fetch(
+                    &mut fetch_join_set,
+                    Arc::clone(&self.fetcher),
+                    scheduled_feed,
+                );
             }
             if claimed_feeds.has_tasks()
                 || claimed_feeds.has_pending_or_active_feeds()
@@ -269,8 +269,8 @@ fn finish_completion_ack(
     should_claim: &mut bool,
 ) -> Result<()> {
     *pending_completion_count = pending_completion_count.saturating_sub(1);
-    let acknowledged_task = joined
-        .map_err(|error| map_join_error(error, "rss completion join failed"))??;
+    let acknowledged_task =
+        joined.map_err(|error| map_join_error(error, "rss completion join failed"))??;
     stdout_log(format!("return {}", acknowledged_task.task_id));
     *should_claim = true;
     Ok(())
@@ -285,7 +285,9 @@ fn request_state<G>(
 ) where
     G: RssGateway + Clone + Send + Sync + 'static,
 {
-    if last_requested_state.as_ref() == Some(&state) || pending_state.as_ref() == Some(&state) {
+    if matches_reporting_state(last_requested_state.as_ref(), &state)
+        || matches_reporting_state(pending_state.as_ref(), &state)
+    {
         return;
     }
     *last_requested_state = Some(state.clone());
@@ -356,4 +358,11 @@ async fn flush_state_updates<G>(
 
 fn map_join_error(error: tokio::task::JoinError, context: &str) -> RssWorkerError {
     RssWorkerError::Runtime(format!("{context}: {error}"))
+}
+
+fn matches_reporting_state(
+    previous_state: Option<&super::RssGatewayState>,
+    state: &super::RssGatewayState,
+) -> bool {
+    previous_state.is_some_and(|previous_state| previous_state.is_equivalent_for_reporting(state))
 }

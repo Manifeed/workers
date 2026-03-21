@@ -275,8 +275,7 @@ impl ControlApp {
         if let Some((last_at, last_sent, last_received)) = self.last_network_sample {
             let elapsed = now.saturating_duration_since(last_at).as_secs_f64();
             if elapsed > 0.0 {
-                self.bandwidth_up_bps =
-                    current_sent.saturating_sub(last_sent) as f64 / elapsed;
+                self.bandwidth_up_bps = current_sent.saturating_sub(last_sent) as f64 / elapsed;
                 self.bandwidth_down_bps =
                     current_received.saturating_sub(last_received) as f64 / elapsed;
             }
@@ -477,7 +476,10 @@ impl eframe::App for ControlApp {
             ui.label(format!("Logs: {}", self.log_file.display()));
             if let Some(snapshot) = &self.status_snapshot {
                 if let Some(last_error) = &snapshot.last_error {
-                    ui.colored_label(egui::Color32::LIGHT_RED, format!("Derniere erreur: {last_error}"));
+                    ui.colored_label(
+                        egui::Color32::LIGHT_RED,
+                        format!("Derniere erreur: {last_error}"),
+                    );
                 }
                 ui.label(format!(
                     "Derniere mise a jour: {}",

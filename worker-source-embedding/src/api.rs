@@ -73,14 +73,19 @@ impl HttpEmbeddingGateway {
         })
     }
 
-    async fn bearer_token(&mut self) -> Result<String> {
-        let token = self.authenticator.ensure_session(&self.api_client).await?;
+    fn bearer_token(&self) -> &str {
+        self.authenticator.bearer_token()
+    }
+
+    fn worker_name(&self) -> &str {
+        self.authenticator.worker_name()
+    }
+
+    fn mark_server_connected(&self) {
         let _ = self.status.mark_server_connected();
-        Ok(token)
     }
 
     async fn claim_once(&mut self) -> Result<Option<ClaimedEmbeddingTask>> {
-        let token = self.bearer_token().await?;
         let tasks = self
             .api_client
             .post_json::<_, Vec<WorkerTaskClaim>>(
@@ -89,36 +94,37 @@ impl HttpEmbeddingGateway {
                     count: 1,
                     lease_seconds: self.lease_seconds,
                 },
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
-        let _ = self.status.mark_server_connected();
+        self.mark_server_connected();
         tasks.into_iter().next().map(Self::parse_claim).transpose()
     }
 
     async fn complete_once(&mut self, request: &EmbeddingTaskCompleteRequest) -> Result<()> {
-        let token = self.bearer_token().await?;
         self.api_client
             .post_json::<_, serde_json::Value>(
                 "/workers/embedding/complete",
                 request,
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
-        let _ = self.status.mark_server_connected();
+        self.mark_server_connected();
         Ok(())
     }
 
     async fn fail_once(&mut self, request: &EmbeddingTaskFailRequest) -> Result<()> {
-        let token = self.bearer_token().await?;
         self.api_client
             .post_json::<_, serde_json::Value>(
                 "/workers/embedding/fail",
                 request,
-                Some(&token),
+                Some(self.bearer_token()),
+                Some(self.worker_name()),
             )
             .await?;
-        let _ = self.status.mark_server_connected();
+        self.mark_server_connected();
         Ok(())
     }
 }

@@ -22,7 +22,7 @@ Le script :
 5. copie les binaires dans `~/.local/share/manifeed/worker-source-embedding` ;
 6. ecrit le fichier d'environnement `~/.config/manifeed/worker-source-embedding.env` ;
 7. prepare le fichier d'etat `~/.local/state/manifeed/worker-source-embedding/status.json` ;
-8. lance `worker-source-embedding enroll` contre le backend ;
+8. ecrit la configuration de la cle API worker ;
 9. installe l'application desktop locale ;
 10. peut installer un service `systemd --user` avec `--install-service`.
 
@@ -30,7 +30,7 @@ Le script :
 
 - Linux x86_64 ou arm64
 - acces reseau au backend Manifeed
-- token d'enrolement `source_embedding`
+- cle API worker rattachee a un utilisateur Manifeed
 - `curl`, `tar`, `python3`, `sha256sum`
 
 Le script tente d'installer les outils manquants via le gestionnaire de paquets systeme.
@@ -63,7 +63,7 @@ Depuis la racine du repo `workers` :
 ```bash
 ./dist/linux/worker-source-embedding/install.sh --non-interactive \
   --api-url http://127.0.0.1:8000 \
-  --enrollment-token manifeed-embedding-enroll
+  --api-key mfk_live_xxxxx
 ```
 
 ### Installation avec service user
@@ -76,7 +76,6 @@ Depuis la racine du repo `workers` :
 
 - application : `~/.local/share/manifeed/worker-source-embedding/`
 - environnement : `~/.config/manifeed/worker-source-embedding.env`
-- identite : `~/.config/manifeed/worker-source-embedding/`
 - cache modeles : `~/.cache/manifeed/worker-source-embedding/models/`
 - logs : `~/.cache/manifeed/worker-source-embedding/worker.log`
 - status : `~/.local/state/manifeed/worker-source-embedding/status.json`
@@ -93,7 +92,7 @@ Depuis la racine du repo `workers` :
 --desktop-binary PATH
 --install-dir PATH
 --api-url URL
---enrollment-token TOKEN
+--api-key TOKEN
 --hf-token TOKEN
 --backend auto|cpu|cuda|webgpu
 --install-service
@@ -102,7 +101,8 @@ Depuis la racine du repo `workers` :
 ## Variables d'environnement reconnues
 
 - `MANIFEED_API_URL`
-- `MANIFEED_EMBEDDING_ENROLLMENT_TOKEN`
+- `MANIFEED_WORKER_API_KEY`
+- `MANIFEED_WORKER_NAME`
 - `MANIFEED_EMBEDDING_HF_TOKEN`
 - `HF_TOKEN`
 - `MANIFEED_EMBEDDING_EXECUTION_BACKEND`

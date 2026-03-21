@@ -35,7 +35,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         config.max_in_flight_requests_per_host,
     );
 
-    info!(api_url = %config.api_url, "worker_rss rust worker started");
+    info!(
+        api_url = %config.api_url,
+        worker_name = %config.auth.worker_name,
+        "worker_rss rust worker started"
+    );
     loop {
         match worker.run_once().await {
             Ok(processed) => {

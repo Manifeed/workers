@@ -2,19 +2,22 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO_WORKERS_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/../../.." && pwd)
+REPO_TARGET_RELEASE_DIR="${REPO_WORKERS_DIR}/target/release"
 APP_NAME="worker-source-embedding"
 DESKTOP_APP_NAME="worker-source-embedding-desktop"
 SERVICE_NAME="manifeed-worker-source-embedding.service"
 DEFAULT_INSTALL_DIR="${HOME}/.local/share/manifeed/worker-source-embedding"
 DEFAULT_CONFIG_DIR="${HOME}/.config/manifeed"
 DEFAULT_ENV_FILE="${DEFAULT_CONFIG_DIR}/worker-source-embedding.env"
-DEFAULT_IDENTITY_DIR="${DEFAULT_CONFIG_DIR}/worker-source-embedding"
 DEFAULT_CACHE_DIR="${HOME}/.cache/manifeed/worker-source-embedding/models"
 DEFAULT_STATUS_FILE="${HOME}/.local/state/manifeed/worker-source-embedding/status.json"
 DEFAULT_LOG_FILE="${HOME}/.cache/manifeed/worker-source-embedding/worker.log"
 DEFAULT_SYSTEMD_DIR="${HOME}/.config/systemd/user"
 DEFAULT_BINARY_PATH="${SCRIPT_DIR}/worker-source-embedding"
 DEFAULT_DESKTOP_BINARY_PATH="${SCRIPT_DIR}/worker-source-embedding-desktop"
+FALLBACK_BINARY_PATH="${REPO_TARGET_RELEASE_DIR}/worker-source-embedding"
+FALLBACK_DESKTOP_BINARY_PATH="${REPO_TARGET_RELEASE_DIR}/worker-source-embedding-desktop"
 DEFAULT_ICON_PATH="${SCRIPT_DIR}/manifeed-worker-source-embedding.svg"
 DEFAULT_APPLICATIONS_DIR="${HOME}/.local/share/applications"
 DEFAULT_ICONS_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
@@ -34,7 +37,7 @@ BINARY_PATH="${DEFAULT_BINARY_PATH}"
 DESKTOP_BINARY_PATH="${DEFAULT_DESKTOP_BINARY_PATH}"
 INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
 API_URL="${MANIFEED_API_URL:-http://127.0.0.1:8000}"
-ENROLLMENT_TOKEN="${MANIFEED_EMBEDDING_ENROLLMENT_TOKEN:-}"
+API_KEY="${MANIFEED_WORKER_API_KEY:-}"
 HF_TOKEN="${MANIFEED_EMBEDDING_HF_TOKEN:-${HF_TOKEN:-}}"
 BACKEND_OVERRIDE="${MANIFEED_EMBEDDING_EXECUTION_BACKEND:-auto}"
 
@@ -62,7 +65,7 @@ Options:
   --binary PATH              Path to the worker-source-embedding binary.
   --install-dir PATH         Installation root directory.
   --api-url URL              Backend base URL.
-  --enrollment-token TOKEN   Worker enrollment token.
+  --api-key TOKEN            Worker API key.
   --hf-token TOKEN           Optional Hugging Face token.
   --backend VALUE            auto|cpu|cuda|webgpu
   --install-service          Also install a systemd --user service.
@@ -183,8 +186,8 @@ prompt_cli() {
   if [ -z "$API_URL" ]; then
     read -r -p "Backend API URL: " API_URL
   fi
-  if [ -z "$ENROLLMENT_TOKEN" ]; then
-    read -r -s -p "Enrollment token: " ENROLLMENT_TOKEN
+  if [ -z "$API_KEY" ]; then
+    read -r -s -p "Worker API key: " API_KEY
     printf '\n'
   fi
   if [ -z "$HF_TOKEN" ]; then
@@ -199,9 +202,9 @@ prompt_gui() {
     --text="Backend API URL" \
     --entry-text="${API_URL}") || exit 1
 
-  ENROLLMENT_TOKEN=$(zenity --password \
+  API_KEY=$(zenity --password \
     --title="Manifeed Worker Installer" \
-    --text="Enrollment token") || exit 1
+    --text="Worker API key") || exit 1
 
   HF_TOKEN=$(zenity --password \
     --title="Manifeed Worker Installer" \
@@ -236,9 +239,9 @@ parse_args() {
         shift
         API_URL=${1:-}
         ;;
-      --enrollment-token)
+      --api-key)
         shift
-        ENROLLMENT_TOKEN=${1:-}
+        API_KEY=${1:-}
         ;;
       --hf-token)
         shift
@@ -263,8 +266,23 @@ parse_args() {
   done
 }
 
+resolve_repo_binary_defaults() {
+  if [ "$BINARY_PATH" = "$DEFAULT_BINARY_PATH" ] && [ ! -x "$BINARY_PATH" ] && [ -x "$FALLBACK_BINARY_PATH" ]; then
+    log "Using repo build binary: ${FALLBACK_BINARY_PATH}"
+    BINARY_PATH="$FALLBACK_BINARY_PATH"
+  fi
+
+  if [ "$DESKTOP_BINARY_PATH" = "$DEFAULT_DESKTOP_BINARY_PATH" ] && [ ! -x "$DESKTOP_BINARY_PATH" ] && [ -x "$FALLBACK_DESKTOP_BINARY_PATH" ]; then
+    log "Using repo build desktop binary: ${FALLBACK_DESKTOP_BINARY_PATH}"
+    DESKTOP_BINARY_PATH="$FALLBACK_DESKTOP_BINARY_PATH"
+  fi
+}
+
 probe_json() {
-  MANIFEED_EMBEDDING_EXECUTION_BACKEND="$BACKEND_OVERRIDE" \
+  MANIFEED_API_URL="$API_URL" \
+    MANIFEED_WORKER_API_KEY="$API_KEY" \
+    MANIFEED_EMBEDDING_HF_TOKEN="$HF_TOKEN" \
+    MANIFEED_EMBEDDING_EXECUTION_BACKEND="$BACKEND_OVERRIDE" \
     "$BINARY_PATH" probe
 }
 
@@ -359,14 +377,13 @@ download_runtime() {
 
 write_env_file() {
   local env_file=$1 runtime_lib=$2
-  mkdir -p "$(dirname "$env_file")" "$DEFAULT_IDENTITY_DIR" "$DEFAULT_CACHE_DIR" "$(dirname "$DEFAULT_STATUS_FILE")" "$(dirname "$DEFAULT_LOG_FILE")"
+  mkdir -p "$(dirname "$env_file")" "$DEFAULT_CACHE_DIR" "$(dirname "$DEFAULT_STATUS_FILE")" "$(dirname "$DEFAULT_LOG_FILE")"
   cat >"$env_file" <<EOF
 MANIFEED_API_URL=${API_URL}
-MANIFEED_EMBEDDING_ENROLLMENT_TOKEN=${ENROLLMENT_TOKEN}
+MANIFEED_WORKER_API_KEY=${API_KEY}
 MANIFEED_EMBEDDING_HF_TOKEN=${HF_TOKEN}
 MANIFEED_EMBEDDING_EXECUTION_BACKEND=${EXECUTION_BACKEND}
 MANIFEED_EMBEDDING_ORT_DYLIB_PATH=${runtime_lib}
-MANIFEED_EMBEDDING_IDENTITY_DIR=${DEFAULT_IDENTITY_DIR}
 MANIFEED_EMBEDDING_CACHE_DIR=${DEFAULT_CACHE_DIR}
 MANIFEED_EMBEDDING_STATUS_FILE=${DEFAULT_STATUS_FILE}
 EOF
@@ -465,6 +482,7 @@ ${probe}"
 main() {
   parse_args "$@"
   ensure_base_tools
+  resolve_repo_binary_defaults
 
   if [ ! -x "$BINARY_PATH" ]; then
     die "worker binary not found or not executable: ${BINARY_PATH}"
@@ -478,7 +496,7 @@ main() {
 
   if [ "$NON_INTERACTIVE" -eq 1 ]; then
     [ -n "$API_URL" ] || die "--api-url is required in non-interactive mode"
-    [ -n "$ENROLLMENT_TOKEN" ] || die "--enrollment-token is required in non-interactive mode"
+    [ -n "$API_KEY" ] || die "--api-key is required in non-interactive mode"
   else
     if maybe_enable_gui; then
       prompt_gui
@@ -488,7 +506,7 @@ main() {
   fi
 
   [ -n "$API_URL" ] || die "backend API URL is required"
-  [ -n "$ENROLLMENT_TOKEN" ] || die "enrollment token is required"
+  [ -n "$API_KEY" ] || die "worker API key is required"
   case "$INSTALL_DIR" in
     *" "*)
       die "install directory must not contain spaces: ${INSTALL_DIR}"
@@ -512,19 +530,6 @@ main() {
   env_file="${DEFAULT_ENV_FILE}"
   write_env_file "$env_file" "$runtime_lib"
   install_desktop_launcher
-
-  log "Triggering worker enrollment"
-  env -i \
-    HOME="$HOME" \
-    PATH="$PATH" \
-    MANIFEED_API_URL="$API_URL" \
-    MANIFEED_EMBEDDING_ENROLLMENT_TOKEN="$ENROLLMENT_TOKEN" \
-    MANIFEED_EMBEDDING_HF_TOKEN="$HF_TOKEN" \
-    MANIFEED_EMBEDDING_EXECUTION_BACKEND="$EXECUTION_BACKEND" \
-    MANIFEED_EMBEDDING_ORT_DYLIB_PATH="$runtime_lib" \
-    MANIFEED_EMBEDDING_IDENTITY_DIR="$DEFAULT_IDENTITY_DIR" \
-    MANIFEED_EMBEDDING_CACHE_DIR="$DEFAULT_CACHE_DIR" \
-    "${INSTALL_DIR}/worker-source-embedding" enroll
 
   launcher_path="${HOME}/.local/bin/manifeed-worker-source-embedding"
   write_launcher "$launcher_path" "$env_file"

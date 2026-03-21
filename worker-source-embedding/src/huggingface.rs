@@ -76,7 +76,9 @@ impl HuggingFaceModelReference {
         }
 
         let (repo_id, revision) = match trimmed.rsplit_once('@') {
-            Some((repo_id, revision)) if !repo_id.trim().is_empty() && !revision.trim().is_empty() => {
+            Some((repo_id, revision))
+                if !repo_id.trim().is_empty() && !revision.trim().is_empty() =>
+            {
                 (repo_id.trim().to_string(), revision.trim().to_string())
             }
             Some(_) => {
@@ -135,7 +137,10 @@ impl HuggingFaceOnnxModelManager {
         Ok(Self {
             client,
             cache_root: config.model_cache_dir.clone(),
-            base_url: config.huggingface_base_url.trim_end_matches('/').to_string(),
+            base_url: config
+                .huggingface_base_url
+                .trim_end_matches('/')
+                .to_string(),
             default_revision: config.huggingface_default_revision.clone(),
             execution_backend: config.execution_backend,
             status,
@@ -169,7 +174,10 @@ impl HuggingFaceOnnxModelManager {
             model_dir = %local_dir.display(),
             "loaded embedding model"
         );
-        self.current_model = Some(LoadedModel { reference, embedder });
+        self.current_model = Some(LoadedModel {
+            reference,
+            embedder,
+        });
         Ok(())
     }
 
@@ -183,10 +191,12 @@ impl HuggingFaceOnnxModelManager {
         })?;
 
         for artifact in REQUIRED_ARTIFACTS {
-            self.ensure_artifact(reference, &model_dir, artifact).await?;
+            self.ensure_artifact(reference, &model_dir, artifact)
+                .await?;
         }
         for artifact in OPTIONAL_ARTIFACTS {
-            self.ensure_artifact(reference, &model_dir, artifact).await?;
+            self.ensure_artifact(reference, &model_dir, artifact)
+                .await?;
         }
         Ok(model_dir)
     }
@@ -316,10 +326,9 @@ impl HuggingFaceOnnxModelManager {
 impl ModelEmbedder for HuggingFaceOnnxModelManager {
     async fn embed(&mut self, model_name: &str, inputs: &[String]) -> Result<Vec<Vec<f32>>> {
         self.ensure_model_loaded(model_name).await?;
-        let loaded_model = self
-            .current_model
-            .as_ref()
-            .ok_or_else(|| EmbeddingWorkerError::Runtime("no embedding model loaded".to_string()))?;
+        let loaded_model = self.current_model.as_ref().ok_or_else(|| {
+            EmbeddingWorkerError::Runtime("no embedding model loaded".to_string())
+        })?;
         loaded_model.embedder.embed(inputs).await
     }
 }

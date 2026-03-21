@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use manifeed_worker_common::{WorkerAuthConfig, WorkerError, WorkerType};
+use manifeed_worker_common::{resolve_worker_name, WorkerAuthConfig, WorkerError, WorkerType};
 
 use crate::error::Result;
 use crate::runtime::ExecutionBackend;
@@ -14,9 +14,9 @@ const DEFAULT_LEASE_SECONDS: u32 = 300;
 const DEFAULT_INFERENCE_BATCH_SIZE: usize = 1;
 const DEFAULT_HUGGINGFACE_BASE_URL: &str = "https://huggingface.co";
 const DEFAULT_HUGGINGFACE_REVISION: &str = "main";
-const DEFAULT_IDENTITY_DIR_SUFFIX: &str = ".config/manifeed/worker-source-embedding";
 const DEFAULT_MODEL_CACHE_DIR_SUFFIX: &str = ".cache/manifeed/worker-source-embedding/models";
-const DEFAULT_STATUS_FILE_SUFFIX: &str = ".local/state/manifeed/worker-source-embedding/status.json";
+const DEFAULT_STATUS_FILE_SUFFIX: &str =
+    ".local/state/manifeed/worker-source-embedding/status.json";
 const DEFAULT_EXECUTION_BACKEND: ExecutionBackend = ExecutionBackend::Auto;
 
 #[derive(Clone, Debug)]
@@ -40,10 +40,7 @@ impl EmbeddingWorkerConfig {
         Ok(Self {
             api_url: optional_env_string("MANIFEED_API_URL")
                 .unwrap_or_else(|| DEFAULT_API_URL.to_string()),
-            poll_seconds: env_or_default(
-                "MANIFEED_EMBEDDING_POLL_SECONDS",
-                DEFAULT_POLL_SECONDS,
-            )?,
+            poll_seconds: env_or_default("MANIFEED_EMBEDDING_POLL_SECONDS", DEFAULT_POLL_SECONDS)?,
             lease_seconds: env_or_default(
                 "MANIFEED_EMBEDDING_LEASE_SECONDS",
                 DEFAULT_LEASE_SECONDS,
@@ -71,15 +68,11 @@ impl EmbeddingWorkerConfig {
                 .or_else(|| optional_env_string("HF_TOKEN")),
             auth: WorkerAuthConfig {
                 worker_type: WorkerType::SourceEmbedding,
-                identity_dir: Some(
-                    optional_env_path("MANIFEED_EMBEDDING_IDENTITY_DIR")
-                        .unwrap_or_else(|| default_home_path(DEFAULT_IDENTITY_DIR_SUFFIX)),
+                api_key: required_env_string("MANIFEED_WORKER_API_KEY")?,
+                worker_name: resolve_worker_name(
+                    optional_env_string("MANIFEED_WORKER_NAME"),
+                    WorkerType::SourceEmbedding,
                 ),
-                enrollment_token: std::env::var("MANIFEED_EMBEDDING_ENROLLMENT_TOKEN")
-                    .ok()
-                    .map(|value| value.trim().to_string())
-                    .filter(|value| !value.is_empty()),
-                worker_version: env!("CARGO_PKG_VERSION").to_string(),
             },
         })
     }
@@ -101,6 +94,12 @@ fn default_home_path(suffix: &str) -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(suffix)
+}
+
+fn required_env_string(key: &str) -> Result<String> {
+    optional_env_string(key).ok_or_else(|| {
+        WorkerError::Config(format!("missing required environment variable {key}")).into()
+    })
 }
 
 fn env_or_default<T>(key: &str, default: T) -> Result<T>

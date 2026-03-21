@@ -147,7 +147,11 @@ fn build_e5_passage_input(source: &EmbeddingSourceInput) -> String {
 
 fn build_plain_embedding_input(source: &EmbeddingSourceInput) -> String {
     let mut parts = vec![format!("title: {}", normalize_whitespace(&source.title))];
-    if let Some(summary) = source.summary.as_ref().map(|value| normalize_whitespace(value)) {
+    if let Some(summary) = source
+        .summary
+        .as_ref()
+        .map(|value| normalize_whitespace(value))
+    {
         if !summary.is_empty() {
             parts.push(format!("summary: {summary}"));
         }
