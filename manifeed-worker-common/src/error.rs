@@ -18,4 +18,8 @@ pub enum WorkerError {
     Auth(String),
     #[error("crypto error: {0}")]
     Crypto(String),
+    #[error("process error: {0}")]
+    Process(String),
+    #[error("version error: {0}")]
+    Version(String),
 }

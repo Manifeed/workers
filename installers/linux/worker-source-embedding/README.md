@@ -1,46 +1,32 @@
-# Installeur Linux du worker d'embeddings
+# Installeur Linux du worker Embedding
 
-Cet installeur cible le bundle Linux du worker `source_embedding`.
+Ce bundle installe le worker d'embeddings et l'application desktop partagee `Manifeed Workers`.
 
-## Ce que le bundle contient
+## Ce que contient le bundle
 
 - `worker-source-embedding`
-- `worker-source-embedding-desktop`
+- `manifeed-workers`
 - `install.sh`
-- `manifeed-worker-source-embedding.svg`
+- `manifeed-workers.svg`
 
-Le script `build-bundle.sh` copie ces artefacts dans `dist/linux/worker-source-embedding/`.
+## Experience d'installation
 
-## Ce que fait `install.sh`
+L'installation standard ne demande que :
+
+- le domaine / `api_url`
+- la cle API worker
+
+Tout le reste part en configuration locale persistante. L'utilisateur n'a plus besoin de re-exporter
+des variables d'environnement a chaque lancement.
 
 Le script :
 
-1. verifie les outils systeme minimaux ;
-2. execute `worker-source-embedding probe` ;
-3. choisit un bundle ONNX Runtime adapte a la machine ;
-4. installe le runtime ONNX localement ;
-5. copie les binaires dans `~/.local/share/manifeed/worker-source-embedding` ;
-6. ecrit le fichier d'environnement `~/.config/manifeed/worker-source-embedding.env` ;
-7. prepare le fichier d'etat `~/.local/state/manifeed/worker-source-embedding/status.json` ;
-8. ecrit la configuration de la cle API worker ;
-9. installe l'application desktop locale ;
-10. peut installer un service `systemd --user` avec `--install-service`.
-
-## Prerequis
-
-- Linux x86_64 ou arm64
-- acces reseau au backend Manifeed
-- cle API worker rattachee a un utilisateur Manifeed
-- `curl`, `tar`, `python3`, `sha256sum`
-
-Le script tente d'installer les outils manquants via le gestionnaire de paquets systeme.
-
-## Politique runtime ONNX actuelle
-
-- machine NVIDIA avec driver CUDA utilisable : bundle ONNX Runtime CUDA ;
-- autres cas : bundle ONNX Runtime CPU ;
-- `webgpu` reste supporte par le binaire, mais l'installeur Linux ne provisionne pas encore
-  de runtime partage pour ce backend.
+1. detecte le runtime ONNX adapte a la machine ;
+2. copie le binaire embedding dans `~/.local/share/manifeed/embedding/` ;
+3. copie l'app desktop partagee dans `~/.local/share/manifeed/desktop/manifeed-workers` ;
+4. initialise `~/.config/manifeed/workers.json` via `worker-source-embedding install` ;
+5. cree des lanceurs stables dans `~/.local/bin/` ;
+6. peut installer un service `systemd --user`.
 
 ## Construction du bundle
 
@@ -52,7 +38,7 @@ Depuis la racine du repo `workers` :
 
 ## Installation
 
-### Mode interactif CLI
+### Mode interactif
 
 ```bash
 ./dist/linux/worker-source-embedding/install.sh --cli
@@ -66,21 +52,29 @@ Depuis la racine du repo `workers` :
   --api-key mfk_live_xxxxx
 ```
 
-### Installation avec service user
+### Installation avec service utilisateur
 
 ```bash
 ./dist/linux/worker-source-embedding/install.sh --install-service
 ```
 
-## Fichiers crees
+## Lanceurs installes
 
-- application : `~/.local/share/manifeed/worker-source-embedding/`
-- environnement : `~/.config/manifeed/worker-source-embedding.env`
-- cache modeles : `~/.cache/manifeed/worker-source-embedding/models/`
-- logs : `~/.cache/manifeed/worker-source-embedding/worker.log`
-- status : `~/.local/state/manifeed/worker-source-embedding/status.json`
-- lanceur CLI : `~/.local/bin/manifeed-worker-source-embedding`
-- desktop entry : `~/.local/share/applications/`
+- `~/.local/bin/manifeed-worker-source-embedding`
+- `~/.local/bin/manifeed-workers`
+
+## Commandes utiles apres installation
+
+```bash
+manifeed-worker-source-embedding run
+manifeed-worker-source-embedding config show
+manifeed-worker-source-embedding config set api-url https://api.example.com
+manifeed-worker-source-embedding config set api-key mfk_live_xxxxx
+manifeed-worker-source-embedding config set acceleration gpu
+manifeed-worker-source-embedding doctor
+manifeed-worker-source-embedding probe
+manifeed-workers
+```
 
 ## Options principales
 
@@ -90,25 +84,18 @@ Depuis la racine du repo `workers` :
 --non-interactive
 --binary PATH
 --desktop-binary PATH
---install-dir PATH
 --api-url URL
 --api-key TOKEN
---hf-token TOKEN
---backend auto|cpu|cuda|webgpu
 --install-service
 ```
 
-## Variables d'environnement reconnues
-
-- `MANIFEED_API_URL`
-- `MANIFEED_WORKER_API_KEY`
-- `MANIFEED_WORKER_NAME`
-- `MANIFEED_EMBEDDING_HF_TOKEN`
-- `HF_TOKEN`
-- `MANIFEED_EMBEDDING_EXECUTION_BACKEND`
-
 ## Notes
 
-- le script est pense pour distribuer le worker d'embeddings, pas le worker RSS ;
-- la fermeture de l'application desktop arrete le worker lance comme processus enfant ;
-- l'UI desktop lit le status file local et ne scrute pas les logs pour construire son etat.
+- le modele est fixe a `Xenova/multilingual-e5-large` ;
+- l'app desktop partagee ouvre maintenant une page `Embedding` dediee ;
+- le mode `Manuel` lance le worker a la demande depuis l'app ou le CLI ;
+- le mode `Service utilisateur` installe un service `systemd --user` pour laisser tourner le worker en continu ;
+- l'app desktop permet de modifier `api_url`, `api_key`, l'acceleration `auto/cpu/gpu`
+  et le mode de lancement sans repasser par des variables d'environnement ;
+- les variables d'environnement historiques restent des overrides experts, mais ne sont plus
+  le mode nominal de fonctionnement.

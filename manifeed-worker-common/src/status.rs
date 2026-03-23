@@ -3,12 +3,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use manifeed_worker_common::api::ApiTrafficObserver;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{EmbeddingWorkerError, Result};
-use crate::runtime::ExecutionBackend;
-use crate::worker::ClaimedEmbeddingTask;
+use crate::api::ApiTrafficObserver;
+use crate::error::{Result, WorkerError};
+use crate::types::WorkerType;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -32,9 +31,10 @@ pub enum ServerConnectionState {
 pub struct CurrentTaskSnapshot {
     pub task_id: u64,
     pub execution_id: u64,
-    pub job_id: String,
-    pub model_name: String,
-    pub source_count: usize,
+    pub job_id: Option<String>,
+    pub label: Option<String>,
+    pub worker_version: Option<String>,
+    pub item_count: Option<usize>,
     pub started_at: DateTime<Utc>,
 }
 
@@ -46,8 +46,10 @@ pub struct NetworkTotalsSnapshot {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerStatusSnapshot {
+    pub app_version: String,
     pub worker_type: String,
-    pub execution_backend: String,
+    pub acceleration_mode: Option<String>,
+    pub execution_backend: Option<String>,
     pub pid: u32,
     pub phase: WorkerPhase,
     pub server_connection: ServerConnectionState,
@@ -55,9 +57,19 @@ pub struct WorkerStatusSnapshot {
     pub last_updated_at: DateTime<Utc>,
     pub last_server_contact_at: Option<DateTime<Utc>>,
     pub current_task: Option<CurrentTaskSnapshot>,
+    pub current_feed_id: Option<u64>,
+    pub current_feed_url: Option<String>,
     pub completed_task_count: u64,
     pub network_totals: NetworkTotalsSnapshot,
     pub last_error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkerStatusInit {
+    pub worker_type: WorkerType,
+    pub app_version: String,
+    pub acceleration_mode: Option<String>,
+    pub execution_backend: Option<String>,
 }
 
 #[derive(Clone)]
@@ -71,28 +83,30 @@ struct WorkerStatusInner {
 }
 
 impl WorkerStatusHandle {
-    pub fn new(path: impl Into<PathBuf>, execution_backend: ExecutionBackend) -> Result<Self> {
+    pub fn new(path: impl Into<PathBuf>, init: WorkerStatusInit) -> Result<Self> {
         let now = Utc::now();
-        let pid = std::process::id();
         let path = path.into();
-        let snapshot = WorkerStatusSnapshot {
-            worker_type: "source_embedding".to_string(),
-            execution_backend: execution_backend.to_string(),
-            pid,
-            phase: WorkerPhase::Starting,
-            server_connection: ServerConnectionState::Unknown,
-            started_at: now,
-            last_updated_at: now,
-            last_server_contact_at: None,
-            current_task: None,
-            completed_task_count: 0,
-            network_totals: NetworkTotalsSnapshot::default(),
-            last_error: None,
-        };
         let handle = Self {
             inner: Arc::new(WorkerStatusInner {
                 path,
-                snapshot: Mutex::new(snapshot),
+                snapshot: Mutex::new(WorkerStatusSnapshot {
+                    app_version: init.app_version,
+                    worker_type: init.worker_type.as_str().to_string(),
+                    acceleration_mode: init.acceleration_mode,
+                    execution_backend: init.execution_backend,
+                    pid: std::process::id(),
+                    phase: WorkerPhase::Starting,
+                    server_connection: ServerConnectionState::Unknown,
+                    started_at: now,
+                    last_updated_at: now,
+                    last_server_contact_at: None,
+                    current_task: None,
+                    current_feed_id: None,
+                    current_feed_url: None,
+                    completed_task_count: 0,
+                    network_totals: NetworkTotalsSnapshot::default(),
+                    last_error: None,
+                }),
             }),
         };
         handle.persist()?;
@@ -103,25 +117,28 @@ impl WorkerStatusHandle {
         &self.inner.path
     }
 
+    pub fn snapshot(&self) -> Result<WorkerStatusSnapshot> {
+        self.inner
+            .snapshot
+            .lock()
+            .map(|snapshot| snapshot.clone())
+            .map_err(|_| WorkerError::Process("worker status mutex poisoned".to_string()))
+    }
+
     pub fn mark_idle(&self) -> Result<()> {
         self.update(|snapshot| {
             snapshot.phase = WorkerPhase::Idle;
             snapshot.current_task = None;
+            snapshot.current_feed_id = None;
+            snapshot.current_feed_url = None;
             snapshot.last_error = None;
         })
     }
 
-    pub fn mark_processing(&self, task: &ClaimedEmbeddingTask) -> Result<()> {
+    pub fn mark_processing(&self, task: CurrentTaskSnapshot) -> Result<()> {
         self.update(|snapshot| {
             snapshot.phase = WorkerPhase::Processing;
-            snapshot.current_task = Some(CurrentTaskSnapshot {
-                task_id: task.task_id,
-                execution_id: task.execution_id,
-                job_id: task.job_id.clone(),
-                model_name: task.embedding_model_name.clone(),
-                source_count: task.sources.len(),
-                started_at: Utc::now(),
-            });
+            snapshot.current_task = Some(task);
             snapshot.last_error = None;
         })
     }
@@ -130,7 +147,9 @@ impl WorkerStatusHandle {
         self.update(|snapshot| {
             snapshot.phase = WorkerPhase::Idle;
             snapshot.current_task = None;
-            snapshot.completed_task_count += 1;
+            snapshot.current_feed_id = None;
+            snapshot.current_feed_url = None;
+            snapshot.completed_task_count = snapshot.completed_task_count.saturating_add(1);
             snapshot.last_error = None;
         })
     }
@@ -162,6 +181,15 @@ impl WorkerStatusHandle {
         self.update(|snapshot| {
             snapshot.phase = WorkerPhase::Stopped;
             snapshot.current_task = None;
+            snapshot.current_feed_id = None;
+            snapshot.current_feed_url = None;
+        })
+    }
+
+    pub fn set_current_feed(&self, feed_id: Option<u64>, feed_url: Option<String>) -> Result<()> {
+        self.update(|snapshot| {
+            snapshot.current_feed_id = feed_id;
+            snapshot.current_feed_url = feed_url;
         })
     }
 
@@ -178,11 +206,12 @@ impl WorkerStatusHandle {
         })
     }
 
-    fn update(&self, update_fn: impl FnOnce(&mut WorkerStatusSnapshot)) -> Result<()> {
+    pub fn update(&self, update_fn: impl FnOnce(&mut WorkerStatusSnapshot)) -> Result<()> {
         {
-            let mut snapshot = self.inner.snapshot.lock().map_err(|_| {
-                EmbeddingWorkerError::Runtime("worker status mutex poisoned".to_string())
-            })?;
+            let mut snapshot =
+                self.inner.snapshot.lock().map_err(|_| {
+                    WorkerError::Process("worker status mutex poisoned".to_string())
+                })?;
             update_fn(&mut snapshot);
             snapshot.last_updated_at = Utc::now();
         }
@@ -190,9 +219,11 @@ impl WorkerStatusHandle {
     }
 
     fn persist(&self) -> Result<()> {
-        let snapshot = self.inner.snapshot.lock().map_err(|_| {
-            EmbeddingWorkerError::Runtime("worker status mutex poisoned".to_string())
-        })?;
+        let snapshot = self
+            .inner
+            .snapshot
+            .lock()
+            .map_err(|_| WorkerError::Process("worker status mutex poisoned".to_string()))?;
         persist_snapshot(&self.inner.path, &snapshot)
     }
 }
@@ -205,27 +236,18 @@ impl ApiTrafficObserver for WorkerStatusHandle {
 
 fn persist_snapshot(path: &Path, snapshot: &WorkerStatusSnapshot) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            EmbeddingWorkerError::Runtime(format!(
-                "unable to create status directory {}: {error}",
-                parent.display()
-            ))
-        })?;
+        fs::create_dir_all(parent)?;
     }
-
     let temp_path = path.with_extension("tmp");
-    let payload = serde_json::to_vec_pretty(snapshot)
-        .map_err(|error| EmbeddingWorkerError::Runtime(error.to_string()))?;
-    fs::write(&temp_path, payload).map_err(|error| {
-        EmbeddingWorkerError::Runtime(format!(
-            "unable to write worker status file {}: {error}",
-            temp_path.display()
-        ))
-    })?;
+    let payload = serde_json::to_vec_pretty(snapshot)?;
+    fs::write(&temp_path, payload)?;
     fs::rename(&temp_path, path).map_err(|error| {
-        EmbeddingWorkerError::Runtime(format!(
-            "unable to move worker status file into place {}: {error}",
-            path.display()
+        WorkerError::Io(std::io::Error::new(
+            error.kind(),
+            format!(
+                "unable to move worker status file into place {}: {error}",
+                path.display()
+            ),
         ))
     })?;
     Ok(())

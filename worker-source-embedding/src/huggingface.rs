@@ -3,15 +3,15 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
+use manifeed_worker_common::WorkerStatusHandle;
 use reqwest::{Client, StatusCode};
 use tokio::io::AsyncWriteExt;
 use tracing::info;
 
-use crate::config::EmbeddingWorkerConfig;
+use crate::config::{EmbeddingWorkerConfig, FIXED_EMBEDDING_MODEL_NAME};
 use crate::error::{EmbeddingWorkerError, Result};
 use crate::onnx::OnnxEmbedder;
 use crate::runtime::ExecutionBackend;
-use crate::status::WorkerStatusHandle;
 use crate::worker::ModelEmbedder;
 
 #[derive(Clone, Copy, Debug)]
@@ -67,29 +67,11 @@ struct HuggingFaceModelReference {
 }
 
 impl HuggingFaceModelReference {
-    fn parse(model_name: &str, default_revision: &str) -> Result<Self> {
-        let trimmed = model_name.trim();
-        if trimmed.is_empty() {
-            return Err(EmbeddingWorkerError::InvalidModelReference(
-                "model name is empty".to_string(),
-            ));
+    fn fixed(default_revision: &str) -> Self {
+        Self {
+            repo_id: FIXED_EMBEDDING_MODEL_NAME.to_string(),
+            revision: default_revision.to_string(),
         }
-
-        let (repo_id, revision) = match trimmed.rsplit_once('@') {
-            Some((repo_id, revision))
-                if !repo_id.trim().is_empty() && !revision.trim().is_empty() =>
-            {
-                (repo_id.trim().to_string(), revision.trim().to_string())
-            }
-            Some(_) => {
-                return Err(EmbeddingWorkerError::InvalidModelReference(format!(
-                    "invalid model reference: {trimmed}"
-                )))
-            }
-            None => (trimmed.to_string(), default_revision.to_string()),
-        };
-
-        Ok(Self { repo_id, revision })
     }
 
     fn requested_name(&self, default_revision: &str) -> String {
@@ -112,11 +94,6 @@ impl HuggingFaceModelReference {
     }
 }
 
-struct LoadedModel {
-    reference: HuggingFaceModelReference,
-    embedder: OnnxEmbedder,
-}
-
 pub struct HuggingFaceOnnxModelManager {
     client: Client,
     cache_root: PathBuf,
@@ -125,7 +102,8 @@ pub struct HuggingFaceOnnxModelManager {
     execution_backend: ExecutionBackend,
     status: WorkerStatusHandle,
     token: Option<String>,
-    current_model: Option<LoadedModel>,
+    model_reference: HuggingFaceModelReference,
+    embedder: Option<OnnxEmbedder>,
 }
 
 impl HuggingFaceOnnxModelManager {
@@ -145,39 +123,24 @@ impl HuggingFaceOnnxModelManager {
             execution_backend: config.execution_backend,
             status,
             token: config.huggingface_token.clone(),
-            current_model: None,
+            model_reference: HuggingFaceModelReference::fixed(&config.huggingface_default_revision),
+            embedder: None,
         })
     }
 
-    async fn ensure_model_loaded(&mut self, model_name: &str) -> Result<()> {
-        let reference = HuggingFaceModelReference::parse(model_name, &self.default_revision)?;
-        if self
-            .current_model
-            .as_ref()
-            .map(|loaded| loaded.reference == reference)
-            .unwrap_or(false)
-        {
+    async fn ensure_model_loaded(&mut self) -> Result<()> {
+        if self.embedder.is_some() {
             return Ok(());
         }
 
-        if let Some(previous_model) = self.current_model.take() {
-            info!(
-                previous_model = %previous_model.reference.requested_name(&self.default_revision),
-                "unloaded embedding model"
-            );
-        }
-
-        let local_dir = self.ensure_model_cached(&reference).await?;
+        let local_dir = self.ensure_model_cached(&self.model_reference).await?;
         let embedder = OnnxEmbedder::new(local_dir.clone(), self.execution_backend)?;
         info!(
-            embedding_model_name = %reference.requested_name(&self.default_revision),
+            embedding_model_name = %self.model_reference.requested_name(&self.default_revision),
             model_dir = %local_dir.display(),
             "loaded embedding model"
         );
-        self.current_model = Some(LoadedModel {
-            reference,
-            embedder,
-        });
+        self.embedder = Some(embedder);
         Ok(())
     }
 
@@ -324,12 +287,12 @@ impl HuggingFaceOnnxModelManager {
 
 #[async_trait]
 impl ModelEmbedder for HuggingFaceOnnxModelManager {
-    async fn embed(&mut self, model_name: &str, inputs: &[String]) -> Result<Vec<Vec<f32>>> {
-        self.ensure_model_loaded(model_name).await?;
-        let loaded_model = self.current_model.as_ref().ok_or_else(|| {
+    async fn embed(&mut self, inputs: &[String]) -> Result<Vec<Vec<f32>>> {
+        self.ensure_model_loaded().await?;
+        let embedder = self.embedder.as_ref().ok_or_else(|| {
             EmbeddingWorkerError::Runtime("no embedding model loaded".to_string())
         })?;
-        loaded_model.embedder.embed(inputs).await
+        embedder.embed(inputs).await
     }
 }
 

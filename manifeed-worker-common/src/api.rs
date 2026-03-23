@@ -6,8 +6,6 @@ use serde::Serialize;
 
 use crate::error::{Result, WorkerError};
 
-const WORKER_NAME_HEADER: &str = "x-manifeed-worker-name";
-
 pub trait ApiTrafficObserver: Send + Sync {
     fn record_transfer(&self, request_bytes: usize, response_bytes: usize);
 }
@@ -40,17 +38,11 @@ impl ApiClient {
         self
     }
 
-    pub async fn get_json<T>(
-        &self,
-        path: &str,
-        bearer_token: Option<&str>,
-        worker_name: Option<&str>,
-    ) -> Result<T>
+    pub async fn get_json<T>(&self, path: &str, bearer_token: Option<&str>) -> Result<T>
     where
         T: DeserializeOwned,
     {
-        let request =
-            self.authorized_request(self.client.get(self.url(path)?), bearer_token, worker_name);
+        let request = self.authorized_request(self.client.get(self.url(path)?), bearer_token);
         let (payload, response_bytes) = self.handle_response(request.send().await?).await?;
         self.record_transfer(0, response_bytes);
         Ok(payload)
@@ -61,15 +53,13 @@ impl ApiClient {
         path: &str,
         payload: &TReq,
         bearer_token: Option<&str>,
-        worker_name: Option<&str>,
     ) -> Result<TRes>
     where
         TReq: Serialize + ?Sized,
         TRes: DeserializeOwned,
     {
         let request_body = serde_json::to_vec(payload)?;
-        let request =
-            self.authorized_request(self.client.post(self.url(path)?), bearer_token, worker_name);
+        let request = self.authorized_request(self.client.post(self.url(path)?), bearer_token);
         let (payload, response_bytes) = self
             .handle_response(
                 request
@@ -96,16 +86,9 @@ impl ApiClient {
         &self,
         request: reqwest::RequestBuilder,
         bearer_token: Option<&str>,
-        worker_name: Option<&str>,
     ) -> reqwest::RequestBuilder {
-        let request = if let Some(token) = bearer_token {
+        if let Some(token) = bearer_token {
             request.header(AUTHORIZATION, format!("Bearer {token}"))
-        } else {
-            request
-        };
-
-        if let Some(name) = worker_name.filter(|value| !value.trim().is_empty()) {
-            request.header(WORKER_NAME_HEADER, name.trim())
         } else {
             request
         }

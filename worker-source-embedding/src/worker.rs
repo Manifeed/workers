@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use chrono::Utc;
+use manifeed_worker_common::{CurrentTaskSnapshot, WorkerStatusHandle};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EmbeddingWorkerError, Result};
-use crate::status::WorkerStatusHandle;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EmbeddingSourceInput {
@@ -17,7 +18,7 @@ pub struct ClaimedEmbeddingTask {
     pub task_id: u64,
     pub execution_id: u64,
     pub job_id: String,
-    pub embedding_model_name: String,
+    pub worker_version: String,
     pub sources: Vec<EmbeddingSourceInput>,
 }
 
@@ -28,14 +29,21 @@ pub trait EmbeddingGateway {
         &mut self,
         task_id: u64,
         execution_id: u64,
+        worker_version: String,
         sources: Vec<EmbeddingResultSource>,
     ) -> Result<()>;
-    async fn fail(&mut self, task_id: u64, execution_id: u64, error_message: String) -> Result<()>;
+    async fn fail(
+        &mut self,
+        task_id: u64,
+        execution_id: u64,
+        worker_version: String,
+        error_message: String,
+    ) -> Result<()>;
 }
 
 #[async_trait]
 pub trait ModelEmbedder {
-    async fn embed(&mut self, model_name: &str, inputs: &[String]) -> Result<Vec<Vec<f32>>>;
+    async fn embed(&mut self, inputs: &[String]) -> Result<Vec<Vec<f32>>>;
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -75,27 +83,32 @@ where
             let _ = self.status.mark_idle();
             return Ok(false);
         };
-        let _ = self.status.mark_processing(&task);
+        let _ = self.status.mark_processing(CurrentTaskSnapshot {
+            task_id: task.task_id,
+            execution_id: task.execution_id,
+            job_id: Some(task.job_id.clone()),
+            label: Some(format!("embedding job {}", task.job_id)),
+            worker_version: Some(task.worker_version.clone()),
+            item_count: Some(task.sources.len()),
+            started_at: Utc::now(),
+        });
 
         let mut vectors = Vec::with_capacity(task.sources.len());
         let mut chunk_inputs = Vec::with_capacity(self.inference_batch_size);
         for source_batch in task.sources.chunks(self.inference_batch_size) {
             chunk_inputs.clear();
-            chunk_inputs.extend(
-                source_batch
-                    .iter()
-                    .map(|source| build_embedding_input(&task.embedding_model_name, source)),
-            );
-            let mut batch_vectors = match self
-                .embedder
-                .embed(&task.embedding_model_name, &chunk_inputs)
-                .await
-            {
+            chunk_inputs.extend(source_batch.iter().map(build_embedding_input));
+            let mut batch_vectors = match self.embedder.embed(&chunk_inputs).await {
                 Ok(vectors) => vectors,
                 Err(error) => {
                     let _ = self.status.mark_error(error.to_string());
                     self.gateway
-                        .fail(task.task_id, task.execution_id, error.to_string())
+                        .fail(
+                            task.task_id,
+                            task.execution_id,
+                            task.worker_version.clone(),
+                            error.to_string(),
+                        )
                         .await?;
                     return Err(error);
                 }
@@ -112,7 +125,12 @@ where
             );
             let _ = self.status.mark_error(message.clone());
             self.gateway
-                .fail(task.task_id, task.execution_id, message.clone())
+                .fail(
+                    task.task_id,
+                    task.execution_id,
+                    task.worker_version.clone(),
+                    message.clone(),
+                )
                 .await?;
             return Err(EmbeddingWorkerError::Runtime(message));
         }
@@ -127,18 +145,20 @@ where
             })
             .collect::<Vec<_>>();
         self.gateway
-            .complete(task.task_id, task.execution_id, results)
+            .complete(
+                task.task_id,
+                task.execution_id,
+                task.worker_version.clone(),
+                results,
+            )
             .await?;
         let _ = self.status.mark_completed_task();
         Ok(true)
     }
 }
 
-pub fn build_embedding_input(model_name: &str, source: &EmbeddingSourceInput) -> String {
-    if uses_e5_passage_prefix(model_name) {
-        return build_e5_passage_input(source);
-    }
-    build_plain_embedding_input(source)
+pub fn build_embedding_input(source: &EmbeddingSourceInput) -> String {
+    build_e5_passage_input(source)
 }
 
 fn build_e5_passage_input(source: &EmbeddingSourceInput) -> String {
@@ -157,10 +177,6 @@ fn build_plain_embedding_input(source: &EmbeddingSourceInput) -> String {
         }
     }
     parts.join(" | ")
-}
-
-fn uses_e5_passage_prefix(model_name: &str) -> bool {
-    model_name.to_ascii_lowercase().contains("e5")
 }
 
 fn normalize_whitespace(value: &str) -> String {

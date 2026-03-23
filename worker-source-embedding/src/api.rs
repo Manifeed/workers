@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use manifeed_worker_common::{
-    ApiClient, WorkerAuthenticator, WorkerTaskClaim, WorkerTaskClaimRequest,
+    ApiClient, WorkerAuthenticator, WorkerStatusHandle, WorkerTaskClaim, WorkerTaskClaimRequest,
 };
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
@@ -10,7 +10,6 @@ use tracing::warn;
 
 use crate::config::EmbeddingWorkerConfig;
 use crate::error::{EmbeddingWorkerError, Result};
-use crate::status::WorkerStatusHandle;
 use crate::worker::{
     ClaimedEmbeddingTask, EmbeddingGateway, EmbeddingResultSource, EmbeddingSourceInput,
 };
@@ -20,7 +19,7 @@ const NETWORK_RETRY_DELAY_SECONDS: u64 = 5;
 #[derive(Deserialize)]
 struct EmbeddingTaskPayload {
     job_id: String,
-    embedding_model_name: String,
+    worker_version: String,
     sources: Vec<EmbeddingSourceInput>,
 }
 
@@ -28,6 +27,7 @@ struct EmbeddingTaskPayload {
 struct EmbeddingTaskCompleteRequest {
     task_id: u64,
     execution_id: u64,
+    worker_version: String,
     result_payload: EmbeddingTaskCompletePayload,
 }
 
@@ -40,6 +40,7 @@ struct EmbeddingTaskCompletePayload {
 struct EmbeddingTaskFailRequest {
     task_id: u64,
     execution_id: u64,
+    worker_version: String,
     error_message: String,
 }
 
@@ -48,6 +49,7 @@ pub struct HttpEmbeddingGateway {
     authenticator: WorkerAuthenticator,
     lease_seconds: u32,
     status: WorkerStatusHandle,
+    worker_version: String,
 }
 
 impl HttpEmbeddingGateway {
@@ -58,6 +60,7 @@ impl HttpEmbeddingGateway {
             authenticator: WorkerAuthenticator::new(config.auth.clone())?,
             lease_seconds: config.lease_seconds,
             status,
+            worker_version: config.worker_version.clone(),
         })
     }
 
@@ -68,17 +71,13 @@ impl HttpEmbeddingGateway {
             task_id: task.task_id,
             execution_id: task.execution_id,
             job_id: payload.job_id,
-            embedding_model_name: payload.embedding_model_name,
+            worker_version: payload.worker_version,
             sources: payload.sources,
         })
     }
 
     fn bearer_token(&self) -> &str {
         self.authenticator.bearer_token()
-    }
-
-    fn worker_name(&self) -> &str {
-        self.authenticator.worker_name()
     }
 
     fn mark_server_connected(&self) {
@@ -93,9 +92,9 @@ impl HttpEmbeddingGateway {
                 &WorkerTaskClaimRequest {
                     count: 1,
                     lease_seconds: self.lease_seconds,
+                    worker_version: Some(self.worker_version.clone()),
                 },
                 Some(self.bearer_token()),
-                Some(self.worker_name()),
             )
             .await?;
         self.mark_server_connected();
@@ -108,7 +107,6 @@ impl HttpEmbeddingGateway {
                 "/workers/embedding/complete",
                 request,
                 Some(self.bearer_token()),
-                Some(self.worker_name()),
             )
             .await?;
         self.mark_server_connected();
@@ -121,7 +119,6 @@ impl HttpEmbeddingGateway {
                 "/workers/embedding/fail",
                 request,
                 Some(self.bearer_token()),
-                Some(self.worker_name()),
             )
             .await?;
         self.mark_server_connected();
@@ -152,11 +149,13 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
         &mut self,
         task_id: u64,
         execution_id: u64,
+        worker_version: String,
         sources: Vec<EmbeddingResultSource>,
     ) -> Result<()> {
         let request = EmbeddingTaskCompleteRequest {
             task_id,
             execution_id,
+            worker_version,
             result_payload: EmbeddingTaskCompletePayload { sources },
         };
 
@@ -178,10 +177,17 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
         }
     }
 
-    async fn fail(&mut self, task_id: u64, execution_id: u64, error_message: String) -> Result<()> {
+    async fn fail(
+        &mut self,
+        task_id: u64,
+        execution_id: u64,
+        worker_version: String,
+        error_message: String,
+    ) -> Result<()> {
         let request = EmbeddingTaskFailRequest {
             task_id,
             execution_id,
+            worker_version,
             error_message,
         };
 

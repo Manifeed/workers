@@ -274,7 +274,7 @@ impl ClaimedFeedQueue {
 
 pub(crate) fn idle_state() -> RssGatewayState {
     RssGatewayState {
-        active: true,
+        active: false,
         connection_state: "idle".to_string(),
         pending_tasks: 0,
         desired_state: Some("running".to_string()),
