@@ -6,7 +6,7 @@ use manifeed_worker_common::{
     app_paths, check_worker_connection, check_worker_release_status, install_user_service,
     load_workers_config, resolve_workers_config_path, save_workers_config, start_user_service,
     stop_user_service, uninstall_user_service, AccelerationMode, ReleaseCheckStatus, ServiceMode,
-    WorkerStatusHandle, WorkerStatusInit, WorkerType,
+    WorkerStatusHandle, WorkerStatusInit, WorkerType, DEFAULT_API_URL,
 };
 use serde_json::json;
 use tracing::{error, info, warn};
@@ -51,8 +51,6 @@ struct RunArgs {
     #[arg(long)]
     config: Option<PathBuf>,
     #[arg(long)]
-    api_url: Option<String>,
-    #[arg(long)]
     api_key: Option<String>,
     #[arg(long, value_enum)]
     acceleration: Option<AccelerationArg>,
@@ -74,8 +72,6 @@ struct ProbeArgs {
 struct InstallArgs {
     #[arg(long)]
     config: Option<PathBuf>,
-    #[arg(long)]
-    api_url: String,
     #[arg(long)]
     api_key: String,
     #[arg(long, value_enum)]
@@ -108,7 +104,6 @@ enum ConfigCommand {
 
 #[derive(Clone, Debug, ValueEnum)]
 enum ConfigField {
-    ApiUrl,
     ApiKey,
     Acceleration,
     ServiceMode,
@@ -165,7 +160,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
     let config = EmbeddingWorkerConfig::load(EmbeddingWorkerConfigOverrides {
         config_path: args.config,
-        api_url: args.api_url,
         api_key: args.api_key,
         acceleration_mode: args.acceleration.map(map_acceleration_arg),
         provider_override: args.provider.map(map_provider_arg),
@@ -263,7 +257,6 @@ fn install_command(args: InstallArgs) -> Result<(), Box<dyn std::error::Error>> 
     let (_, mut config) = load_workers_config(Some(config_path.as_path()))?;
     config.install_worker(
         WorkerType::SourceEmbedding,
-        args.api_url.clone(),
         args.api_key.clone(),
         Some(current_exe.clone()),
     );
@@ -315,13 +308,10 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
                     "config_path": config_path,
                     "embedding": {
                         "enabled": config_value.embedding.enabled,
-                        "api_url": config_value.embedding.api_url,
                         "api_key": api_key,
                         "service_mode": config_value.embedding.service_mode,
                         "binary_path": config_value.embedding.binary_path,
                         "worker_version": config_value.embedding.worker_version,
-                        "poll_seconds": config_value.embedding.poll_seconds,
-                        "lease_seconds": config_value.embedding.lease_seconds,
                         "inference_batch_size": config_value.embedding.inference_batch_size,
                         "acceleration_mode": config_value.embedding.acceleration_mode,
                     }
@@ -337,7 +327,6 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
             let config_path = resolve_workers_config_path(config.as_deref())?;
             let (_, mut config_value) = load_workers_config(Some(config_path.as_path()))?;
             match field {
-                ConfigField::ApiUrl => config_value.embedding.api_url = value,
                 ConfigField::ApiKey => config_value.embedding.api_key = value,
                 ConfigField::Acceleration => {
                     config_value.embedding.acceleration_mode = parse_acceleration_mode(&value)?;
@@ -360,7 +349,6 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
 fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
     let config = EmbeddingWorkerConfig::load(EmbeddingWorkerConfigOverrides {
         config_path: args.config.clone(),
-        api_url: None,
         api_key: None,
         acceleration_mode: None,
         provider_override: None,
@@ -397,15 +385,13 @@ fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-fn version_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let config_path = resolve_workers_config_path(args.config.as_deref())?;
-    let (_, config) = load_workers_config(Some(config_path.as_path()))?;
+fn version_command(_args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
     let version_cache_path = app_paths()?.version_cache_dir().join(format!(
         "{}.json",
         WorkerType::SourceEmbedding.cli_product()
     ));
     let release = check_worker_release_status(
-        config.embedding.api_url.as_str(),
+        DEFAULT_API_URL,
         WorkerType::SourceEmbedding.cli_product(),
         APP_VERSION,
         version_cache_path.as_path(),

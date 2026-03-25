@@ -40,46 +40,29 @@ pub enum AccelerationMode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedWorkerSettings {
-    pub enabled: bool,
-    pub api_url: String,
-    pub api_key: String,
-    pub service_mode: ServiceMode,
-    pub binary_path: Option<PathBuf>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RssWorkerSettings {
     pub enabled: bool,
-    pub api_url: String,
     pub api_key: String,
     pub service_mode: ServiceMode,
     pub binary_path: Option<PathBuf>,
-    pub poll_seconds: u64,
-    pub lease_seconds: u32,
-    pub host_max_requests_per_second: u32,
     pub max_in_flight_requests: usize,
-    pub max_in_flight_requests_per_host: usize,
-    pub max_claimed_tasks: usize,
-    pub request_timeout_seconds: u64,
-    pub fetch_retry_count: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct EmbeddingWorkerSettings {
     pub enabled: bool,
-    pub api_url: String,
     pub api_key: String,
     pub service_mode: ServiceMode,
     pub binary_path: Option<PathBuf>,
     pub worker_version: String,
-    pub poll_seconds: u64,
-    pub lease_seconds: u32,
     pub inference_batch_size: usize,
     pub acceleration_mode: AccelerationMode,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct WorkersConfig {
     pub schema_version: u32,
     pub rss: RssWorkerSettings,
@@ -90,18 +73,10 @@ impl Default for RssWorkerSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            api_url: DEFAULT_API_URL.to_string(),
             api_key: String::new(),
             service_mode: ServiceMode::Manual,
             binary_path: None,
-            poll_seconds: DEFAULT_RSS_POLL_SECONDS,
-            lease_seconds: DEFAULT_RSS_LEASE_SECONDS,
-            host_max_requests_per_second: DEFAULT_RSS_HOST_MAX_REQUESTS_PER_SECOND,
             max_in_flight_requests: DEFAULT_RSS_MAX_IN_FLIGHT_REQUESTS,
-            max_in_flight_requests_per_host: DEFAULT_RSS_MAX_IN_FLIGHT_REQUESTS_PER_HOST,
-            max_claimed_tasks: DEFAULT_RSS_MAX_CLAIMED_TASKS,
-            request_timeout_seconds: DEFAULT_RSS_REQUEST_TIMEOUT_SECONDS,
-            fetch_retry_count: DEFAULT_RSS_FETCH_RETRY_COUNT,
         }
     }
 }
@@ -110,13 +85,10 @@ impl Default for EmbeddingWorkerSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            api_url: DEFAULT_API_URL.to_string(),
             api_key: String::new(),
             service_mode: ServiceMode::Manual,
             binary_path: None,
             worker_version: DEFAULT_EMBEDDING_WORKER_VERSION.to_string(),
-            poll_seconds: DEFAULT_EMBEDDING_POLL_SECONDS,
-            lease_seconds: DEFAULT_EMBEDDING_LEASE_SECONDS,
             inference_batch_size: DEFAULT_EMBEDDING_INFERENCE_BATCH_SIZE,
             acceleration_mode: AccelerationMode::Auto,
         }
@@ -164,20 +136,17 @@ impl WorkersConfig {
     pub fn install_worker(
         &mut self,
         worker_type: WorkerType,
-        api_url: String,
         api_key: String,
         binary_path: Option<PathBuf>,
     ) {
         match worker_type {
             WorkerType::RssScrapper => {
                 self.rss.enabled = true;
-                self.rss.api_url = api_url;
                 self.rss.api_key = api_key;
                 self.rss.binary_path = binary_path;
             }
             WorkerType::SourceEmbedding => {
                 self.embedding.enabled = true;
-                self.embedding.api_url = api_url;
                 self.embedding.api_key = api_key;
                 self.embedding.binary_path = binary_path;
             }
@@ -185,10 +154,8 @@ impl WorkersConfig {
     }
 
     pub fn worker_api_url(&self, worker_type: WorkerType) -> &str {
-        match worker_type {
-            WorkerType::RssScrapper => &self.rss.api_url,
-            WorkerType::SourceEmbedding => &self.embedding.api_url,
-        }
+        let _ = worker_type;
+        DEFAULT_API_URL
     }
 
     pub fn worker_api_key(&self, worker_type: WorkerType) -> &str {

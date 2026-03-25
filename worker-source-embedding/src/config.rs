@@ -14,11 +14,12 @@ use crate::runtime::{probe_system, ExecutionBackend};
 const DEFAULT_HUGGINGFACE_BASE_URL: &str = "https://huggingface.co";
 const DEFAULT_HUGGINGFACE_REVISION: &str = "main";
 pub const FIXED_EMBEDDING_MODEL_NAME: &str = "Xenova/multilingual-e5-large";
+const BUILTIN_EMBEDDING_POLL_SECONDS: u64 = 30;
+const BUILTIN_EMBEDDING_LEASE_SECONDS: u32 = 300;
 
 #[derive(Clone, Debug, Default)]
 pub struct EmbeddingWorkerConfigOverrides {
     pub config_path: Option<PathBuf>,
-    pub api_url: Option<String>,
     pub api_key: Option<String>,
     pub acceleration_mode: Option<AccelerationMode>,
     pub provider_override: Option<ExecutionBackend>,
@@ -29,6 +30,9 @@ pub struct EmbeddingWorkerConfig {
     pub api_url: String,
     pub poll_seconds: u64,
     pub lease_seconds: u32,
+    pub session_ttl_seconds: u32,
+    pub worker_class: String,
+    pub queue_lane: String,
     pub inference_batch_size: usize,
     pub acceleration_mode: AccelerationMode,
     pub execution_backend: ExecutionBackend,
@@ -75,17 +79,6 @@ impl EmbeddingWorkerConfig {
             }),
             ort_dylib_path.as_deref(),
         )?;
-        let api_url = overrides
-            .api_url
-            .or_else(|| optional_env_string("MANIFEED_API_URL"))
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| {
-                if stored.embedding.api_url.trim().is_empty() {
-                    DEFAULT_API_URL.to_string()
-                } else {
-                    stored.embedding.api_url.clone()
-                }
-            });
         let api_key = overrides
             .api_key
             .or_else(|| optional_env_string("MANIFEED_WORKER_API_KEY"))
@@ -95,25 +88,24 @@ impl EmbeddingWorkerConfig {
             })
             .ok_or_else(|| {
                 WorkerError::Config(
-                    "missing worker API key; run `worker-source-embedding install --api-url ... --api-key ...` or set MANIFEED_WORKER_API_KEY"
+                    "missing worker API key; run `worker-source-embedding install --api-key ...` or set MANIFEED_WORKER_API_KEY"
                         .to_string(),
                 )
             })?;
 
         Ok(Self {
-            api_url,
-            poll_seconds: env_or_value(
-                "MANIFEED_EMBEDDING_POLL_SECONDS",
-                stored.embedding.poll_seconds,
+            api_url: DEFAULT_API_URL.to_string(),
+            poll_seconds: BUILTIN_EMBEDDING_POLL_SECONDS,
+            lease_seconds: BUILTIN_EMBEDDING_LEASE_SECONDS,
+            session_ttl_seconds: env_or_value(
+                "MANIFEED_EMBEDDING_SESSION_TTL_SECONDS",
+                3600u32,
             )?,
-            lease_seconds: env_or_value(
-                "MANIFEED_EMBEDDING_LEASE_SECONDS",
-                stored.embedding.lease_seconds,
-            )?,
-            inference_batch_size: env_or_value(
-                "MANIFEED_EMBEDDING_INFERENCE_BATCH_SIZE",
-                stored.embedding.inference_batch_size,
-            )?,
+            worker_class: optional_env_string("MANIFEED_EMBEDDING_WORKER_CLASS")
+                .unwrap_or_else(|| "external".to_string()),
+            queue_lane: optional_env_string("MANIFEED_EMBEDDING_QUEUE_LANE")
+                .unwrap_or_else(|| "safe".to_string()),
+            inference_batch_size: stored.embedding.inference_batch_size.max(1),
             acceleration_mode,
             execution_backend,
             ort_dylib_path,

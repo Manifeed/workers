@@ -13,7 +13,6 @@ Ce bundle installe le worker d'embeddings et l'application desktop partagee `Man
 
 L'installation standard ne demande que :
 
-- le domaine / `api_url`
 - la cle API worker
 
 Tout le reste part en configuration locale persistante. L'utilisateur n'a plus besoin de re-exporter
@@ -48,7 +47,6 @@ Depuis la racine du repo `workers` :
 
 ```bash
 ./dist/linux/worker-source-embedding/install.sh --non-interactive \
-  --api-url http://127.0.0.1:8000 \
   --api-key mfk_live_xxxxx
 ```
 
@@ -68,7 +66,6 @@ Depuis la racine du repo `workers` :
 ```bash
 manifeed-worker-source-embedding run
 manifeed-worker-source-embedding config show
-manifeed-worker-source-embedding config set api-url https://api.example.com
 manifeed-worker-source-embedding config set api-key mfk_live_xxxxx
 manifeed-worker-source-embedding config set acceleration gpu
 manifeed-worker-source-embedding doctor
@@ -84,7 +81,6 @@ manifeed-workers
 --non-interactive
 --binary PATH
 --desktop-binary PATH
---api-url URL
 --api-key TOKEN
 --install-service
 ```
@@ -95,7 +91,7 @@ manifeed-workers
 - l'app desktop partagee ouvre maintenant une page `Embedding` dediee ;
 - le mode `Manuel` lance le worker a la demande depuis l'app ou le CLI ;
 - le mode `Service utilisateur` installe un service `systemd --user` pour laisser tourner le worker en continu ;
-- l'app desktop permet de modifier `api_url`, `api_key`, l'acceleration `auto/cpu/gpu`
+- l'app desktop permet de modifier `api_key`, `inference_batch_size`, l'acceleration `auto/cpu/gpu`
   et le mode de lancement sans repasser par des variables d'environnement ;
 - les variables d'environnement historiques restent des overrides experts, mais ne sont plus
   le mode nominal de fonctionnement.

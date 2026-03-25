@@ -4,4 +4,5 @@ pub mod error;
 pub mod feed;
 pub mod logging;
 pub mod model;
+pub mod gateway;
 pub mod worker;

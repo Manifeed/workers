@@ -20,7 +20,6 @@ pub struct RssWorker<G, F> {
     fetcher: Arc<F>,
     max_in_flight_requests: usize,
     max_in_flight_requests_per_host: usize,
-    max_claimed_tasks: usize,
     last_requested_state: Option<super::RssGatewayState>,
 }
 
@@ -33,7 +32,6 @@ where
         gateway: G,
         fetcher: F,
         max_in_flight_requests: usize,
-        max_claimed_tasks: usize,
         max_in_flight_requests_per_host: usize,
     ) -> Self {
         Self {
@@ -41,7 +39,6 @@ where
             fetcher: Arc::new(fetcher),
             max_in_flight_requests: max_in_flight_requests.max(1),
             max_in_flight_requests_per_host: max_in_flight_requests_per_host.max(1),
-            max_claimed_tasks: max_claimed_tasks.max(1),
             last_requested_state: None,
         }
     }
@@ -67,7 +64,7 @@ where
 
             if should_claim {
                 let available_task_slots = self
-                    .max_claimed_tasks
+                    .max_in_flight_requests
                     .saturating_sub(claimed_feeds.task_count() + pending_completion_count);
                 if available_task_slots > 0 {
                     let claimed_tasks = self.gateway.claim(available_task_slots).await?;

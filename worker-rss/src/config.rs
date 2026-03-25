@@ -9,22 +9,30 @@ use manifeed_worker_common::{
 
 use crate::error::Result;
 
+const BUILTIN_RSS_POLL_SECONDS: u64 = 5;
+const BUILTIN_RSS_LEASE_SECONDS: u32 = 120;
+const BUILTIN_RSS_HOST_MAX_REQUESTS_PER_SECOND: u32 = 20;
+const BUILTIN_RSS_MAX_IN_FLIGHT_REQUESTS_PER_HOST: usize = 4;
+const BUILTIN_RSS_REQUEST_TIMEOUT_SECONDS: u64 = 10;
+const BUILTIN_RSS_FETCH_RETRY_COUNT: u32 = 1;
+
 #[derive(Clone, Debug, Default)]
 pub struct RssWorkerConfigOverrides {
     pub config_path: Option<PathBuf>,
-    pub api_url: Option<String>,
     pub api_key: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RssWorkerConfig {
     pub api_url: String,
+    pub worker_class: String,
+    pub queue_lane: String,
+    pub session_ttl_seconds: u32,
     pub poll_seconds: u64,
     pub lease_seconds: u32,
     pub host_max_requests_per_second: u32,
     pub max_in_flight_requests: usize,
     pub max_in_flight_requests_per_host: usize,
-    pub max_claimed_tasks: usize,
     pub request_timeout_seconds: u64,
     pub fetch_retry_count: u32,
     pub status_file_path: PathBuf,
@@ -39,17 +47,6 @@ impl RssWorkerConfig {
         let worker_paths = app_dirs.worker_paths(WorkerType::RssScrapper);
         let (config_path, stored) = load_workers_config(overrides.config_path.as_deref())?;
 
-        let api_url = overrides
-            .api_url
-            .or_else(|| optional_env_string("MANIFEED_API_URL"))
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| {
-                if stored.rss.api_url.trim().is_empty() {
-                    DEFAULT_API_URL.to_string()
-                } else {
-                    stored.rss.api_url.clone()
-                }
-            });
         let api_key = overrides
             .api_key
             .or_else(|| optional_env_string("MANIFEED_WORKER_API_KEY"))
@@ -59,39 +56,25 @@ impl RssWorkerConfig {
             })
             .ok_or_else(|| {
                 WorkerError::Config(
-                    "missing worker API key; run `worker-rss install --api-url ... --api-key ...` or set MANIFEED_WORKER_API_KEY"
+                    "missing worker API key; run `worker-rss install --api-key ...` or set MANIFEED_WORKER_API_KEY"
                         .to_string(),
                 )
             })?;
 
         Ok(Self {
-            api_url,
-            poll_seconds: env_or_value("MANIFEED_RSS_POLL_SECONDS", stored.rss.poll_seconds)?,
-            lease_seconds: env_or_value("MANIFEED_RSS_LEASE_SECONDS", stored.rss.lease_seconds)?,
-            host_max_requests_per_second: env_or_value(
-                "MANIFEED_RSS_HOST_MAX_REQUESTS_PER_SECOND",
-                stored.rss.host_max_requests_per_second,
-            )?,
-            max_in_flight_requests: env_or_value(
-                "MANIFEED_RSS_MAX_IN_FLIGHT_REQUESTS",
-                stored.rss.max_in_flight_requests,
-            )?,
-            max_in_flight_requests_per_host: env_or_value(
-                "MANIFEED_RSS_MAX_IN_FLIGHT_REQUESTS_PER_HOST",
-                stored.rss.max_in_flight_requests_per_host,
-            )?,
-            max_claimed_tasks: env_or_value(
-                "MANIFEED_RSS_MAX_CLAIMED_TASKS",
-                stored.rss.max_claimed_tasks,
-            )?,
-            request_timeout_seconds: env_or_value(
-                "MANIFEED_RSS_REQUEST_TIMEOUT_SECONDS",
-                stored.rss.request_timeout_seconds,
-            )?,
-            fetch_retry_count: env_or_value(
-                "MANIFEED_RSS_FETCH_RETRY_COUNT",
-                stored.rss.fetch_retry_count,
-            )?,
+            api_url: DEFAULT_API_URL.to_string(),
+            worker_class: optional_env_string("MANIFEED_RSS_WORKER_CLASS")
+                .unwrap_or_else(|| "external".to_string()),
+            queue_lane: optional_env_string("MANIFEED_RSS_QUEUE_LANE")
+                .unwrap_or_else(|| "safe".to_string()),
+            session_ttl_seconds: env_or_value("MANIFEED_RSS_SESSION_TTL_SECONDS", 3600u32)?,
+            poll_seconds: BUILTIN_RSS_POLL_SECONDS,
+            lease_seconds: BUILTIN_RSS_LEASE_SECONDS,
+            host_max_requests_per_second: BUILTIN_RSS_HOST_MAX_REQUESTS_PER_SECOND,
+            max_in_flight_requests: stored.rss.max_in_flight_requests.max(1),
+            max_in_flight_requests_per_host: BUILTIN_RSS_MAX_IN_FLIGHT_REQUESTS_PER_HOST,
+            request_timeout_seconds: BUILTIN_RSS_REQUEST_TIMEOUT_SECONDS,
+            fetch_retry_count: BUILTIN_RSS_FETCH_RETRY_COUNT,
             status_file_path: worker_paths.status_file,
             version_cache_path: app_dirs
                 .version_cache_dir()

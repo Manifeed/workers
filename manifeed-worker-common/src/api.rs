@@ -73,6 +73,29 @@ impl ApiClient {
         Ok(payload)
     }
 
+    pub async fn post_json_bytes<TRes>(
+        &self,
+        path: &str,
+        request_body: Vec<u8>,
+        bearer_token: Option<&str>,
+    ) -> Result<TRes>
+    where
+        TRes: DeserializeOwned,
+    {
+        let request = self.authorized_request(self.client.post(self.url(path)?), bearer_token);
+        let (payload, response_bytes) = self
+            .handle_response(
+                request
+                    .header(CONTENT_TYPE, "application/json")
+                    .body(request_body.clone())
+                    .send()
+                    .await?,
+            )
+            .await?;
+        self.record_transfer(request_body.len(), response_bytes);
+        Ok(payload)
+    }
+
     fn url(&self, path: &str) -> Result<String> {
         let normalized_path = if path.starts_with('/') {
             path.to_string()

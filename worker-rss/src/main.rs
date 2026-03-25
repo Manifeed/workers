@@ -6,7 +6,7 @@ use manifeed_worker_common::{
     app_paths, check_worker_connection, check_worker_release_status, install_user_service,
     load_workers_config, resolve_workers_config_path, save_workers_config, start_user_service,
     stop_user_service, uninstall_user_service, ReleaseCheckStatus, ServiceMode, WorkerStatusHandle,
-    WorkerStatusInit, WorkerType,
+    WorkerStatusInit, WorkerType, DEFAULT_API_URL,
 };
 use serde_json::json;
 use tracing::{error, info, warn};
@@ -48,8 +48,6 @@ struct RunArgs {
     #[arg(long)]
     config: Option<PathBuf>,
     #[arg(long)]
-    api_url: Option<String>,
-    #[arg(long)]
     api_key: Option<String>,
     #[arg(long)]
     log: bool,
@@ -59,8 +57,6 @@ struct RunArgs {
 struct InstallArgs {
     #[arg(long)]
     config: Option<PathBuf>,
-    #[arg(long)]
-    api_url: String,
     #[arg(long)]
     api_key: String,
     #[arg(long)]
@@ -91,7 +87,6 @@ enum ConfigCommand {
 
 #[derive(Clone, Debug, ValueEnum)]
 enum ConfigField {
-    ApiUrl,
     ApiKey,
     ServiceMode,
 }
@@ -135,7 +130,6 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error + Se
 
     let config = RssWorkerConfig::load(RssWorkerConfigOverrides {
         config_path: args.config,
-        api_url: args.api_url,
         api_key: args.api_key,
     })?;
     validate_release_status(&config.api_url)?;
@@ -159,7 +153,6 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error + Se
         gateway,
         fetcher,
         config.max_in_flight_requests,
-        config.max_claimed_tasks,
         config.max_in_flight_requests_per_host,
     );
 
@@ -191,7 +184,6 @@ fn install_command(args: InstallArgs) -> Result<(), Box<dyn std::error::Error + 
     let (_, mut config) = load_workers_config(Some(config_path.as_path()))?;
     config.install_worker(
         WorkerType::RssScrapper,
-        args.api_url.clone(),
         args.api_key.clone(),
         Some(current_exe.clone()),
     );
@@ -239,18 +231,10 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error + Se
                     "config_path": config_path,
                     "rss": {
                         "enabled": config_value.rss.enabled,
-                        "api_url": config_value.rss.api_url,
                         "api_key": api_key,
                         "service_mode": config_value.rss.service_mode,
                         "binary_path": config_value.rss.binary_path,
-                        "poll_seconds": config_value.rss.poll_seconds,
-                        "lease_seconds": config_value.rss.lease_seconds,
-                        "host_max_requests_per_second": config_value.rss.host_max_requests_per_second,
                         "max_in_flight_requests": config_value.rss.max_in_flight_requests,
-                        "max_in_flight_requests_per_host": config_value.rss.max_in_flight_requests_per_host,
-                        "max_claimed_tasks": config_value.rss.max_claimed_tasks,
-                        "request_timeout_seconds": config_value.rss.request_timeout_seconds,
-                        "fetch_retry_count": config_value.rss.fetch_retry_count,
                     }
                 }))?
             );
@@ -264,7 +248,6 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error + Se
             let config_path = resolve_workers_config_path(config.as_deref())?;
             let (_, mut config_value) = load_workers_config(Some(config_path.as_path()))?;
             match field {
-                ConfigField::ApiUrl => config_value.rss.api_url = value,
                 ConfigField::ApiKey => config_value.rss.api_key = value,
                 ConfigField::ServiceMode => {
                     config_value.rss.service_mode = parse_service_mode(&value)?;
@@ -284,7 +267,6 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error + Se
 fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = RssWorkerConfig::load(RssWorkerConfigOverrides {
         config_path: args.config.clone(),
-        api_url: None,
         api_key: None,
     })?;
     let app_dirs = app_paths()?;
@@ -314,14 +296,12 @@ fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-fn version_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let config_path = resolve_workers_config_path(args.config.as_deref())?;
-    let (_, config) = load_workers_config(Some(config_path.as_path()))?;
+fn version_command(_args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let version_cache_path = app_paths()?
         .version_cache_dir()
         .join(format!("{}.json", WorkerType::RssScrapper.cli_product()));
     let release = check_worker_release_status(
-        config.rss.api_url.as_str(),
+        DEFAULT_API_URL,
         WorkerType::RssScrapper.cli_product(),
         APP_VERSION,
         version_cache_path.as_path(),

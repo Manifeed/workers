@@ -78,13 +78,7 @@ impl ControlApp {
 		&self,
 		wt: WorkerType,
 	) -> Option<WorkerReleaseStatus> {
-		let api_url = match wt {
-			WorkerType::RssScrapper => self.config.rss.api_url.trim(),
-			WorkerType::SourceEmbedding => self.config.embedding.api_url.trim(),
-		};
-		if api_url.is_empty() {
-			return None;
-		}
+		let api_url = self.config.worker_api_url(wt);
 		let cache_path = app_paths()
 			.ok()?
 			.version_cache_dir()
@@ -182,9 +176,12 @@ impl ControlApp {
 
 	pub fn api_credentials(&self, wt: WorkerType) -> (&str, &str) {
 		match wt {
-			WorkerType::RssScrapper => (&self.config.rss.api_url, &self.config.rss.api_key),
+			WorkerType::RssScrapper => (
+				self.config.worker_api_url(wt),
+				&self.config.rss.api_key,
+			),
 			WorkerType::SourceEmbedding => (
-				&self.config.embedding.api_url,
+				self.config.worker_api_url(wt),
 				&self.config.embedding.api_key,
 			),
 		}

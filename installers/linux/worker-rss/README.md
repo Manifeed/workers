@@ -13,7 +13,6 @@ Ce bundle installe le worker RSS et l'application desktop partagee `Manifeed Wor
 
 L'installation standard ne demande que :
 
-- le domaine / `api_url`
 - la cle API worker
 
 Le script :
@@ -44,7 +43,6 @@ Depuis la racine du repo `workers` :
 
 ```bash
 ./dist/linux/worker-rss/install.sh --non-interactive \
-  --api-url http://127.0.0.1:8000 \
   --api-key mfk_live_xxxxx
 ```
 
@@ -64,7 +62,6 @@ Depuis la racine du repo `workers` :
 ```bash
 manifeed-worker-rss run
 manifeed-worker-rss config show
-manifeed-worker-rss config set api-url https://api.example.com
 manifeed-worker-rss config set api-key mfk_live_xxxxx
 manifeed-worker-rss doctor
 manifeed-workers
@@ -78,7 +75,6 @@ manifeed-workers
 --non-interactive
 --binary PATH
 --desktop-binary PATH
---api-url URL
 --api-key TOKEN
 --install-service
 ```
@@ -89,5 +85,5 @@ manifeed-workers
 - l'app desktop partagee ouvre maintenant une page `Scraping` dediee ;
 - le mode `Manuel` lance le worker a la demande depuis l'app ou le CLI ;
 - le mode `Service utilisateur` installe un service `systemd --user` pour laisser tourner le worker en continu ;
-- l'app desktop permet ensuite de modifier `api_url`, `api_key` et le mode de lancement ;
+- l'app desktop permet ensuite de modifier `api_key`, le mode de lancement et `max_in_flight_requests` ;
 - les variables d'environnement historiques restent des overrides experts uniquement.

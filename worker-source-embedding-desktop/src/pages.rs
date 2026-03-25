@@ -100,10 +100,10 @@ impl ControlApp {
 	fn draw_config_section(&mut self, ui: &mut egui::Ui, wt: WorkerType) {
 		let subtitle = match wt {
 			WorkerType::RssScrapper => {
-				"Domaine backend, cle API et mode d'execution."
+				"Cle API, mode d'execution et parallelisme RSS."
 			}
 			WorkerType::SourceEmbedding => {
-				"Backend, cle API, acceleration et mode d'execution."
+				"Cle API, acceleration, mode d'execution et batch embedding."
 			}
 		};
 
@@ -142,14 +142,12 @@ impl ControlApp {
 	}
 
 	fn draw_config_form(&mut self, ui: &mut egui::Ui, wt: WorkerType) {
-		let (api_url, api_key, mode) = match wt {
+		let (api_key, mode) = match wt {
 			WorkerType::RssScrapper => (
-				&mut self.config.rss.api_url,
 				&mut self.config.rss.api_key,
 				&mut self.config.rss.service_mode,
 			),
 			WorkerType::SourceEmbedding => (
-				&mut self.config.embedding.api_url,
 				&mut self.config.embedding.api_key,
 				&mut self.config.embedding.service_mode,
 			),
@@ -159,13 +157,6 @@ impl ControlApp {
 			.num_columns(2)
 			.spacing(egui::vec2(16.0, 10.0))
 			.show(ui, |ui| {
-				ui.label("Domaine backend");
-				ui.add(
-					egui::TextEdit::singleline(api_url)
-						.desired_width(ui.available_width()),
-				);
-				ui.end_row();
-
 				ui.label("Cle API");
 				ui.add(
 					egui::TextEdit::singleline(api_key)
@@ -176,6 +167,29 @@ impl ControlApp {
 				ui.label("Mode d'execution");
 				widgets::service_mode_selector(ui, mode);
 				ui.end_row();
+
+				match wt {
+					WorkerType::RssScrapper => {
+						ui.label("Max in flight requests");
+						ui.add(
+							egui::DragValue::new(&mut self.config.rss.max_in_flight_requests)
+								.range(1..=256)
+								.speed(1.0),
+						);
+						ui.end_row();
+					}
+					WorkerType::SourceEmbedding => {
+						ui.label("Inference batch size");
+						ui.add(
+							egui::DragValue::new(
+								&mut self.config.embedding.inference_batch_size,
+							)
+							.range(1..=256)
+							.speed(1.0),
+						);
+						ui.end_row();
+					}
+				}
 			});
 
 		if wt == WorkerType::SourceEmbedding {

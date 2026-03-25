@@ -32,7 +32,6 @@ NON_INTERACTIVE=0
 INSTALL_SERVICE=0
 WORKER_BINARY_PATH="${DEFAULT_WORKER_BINARY_PATH}"
 DESKTOP_BINARY_PATH="${DEFAULT_DESKTOP_BINARY_PATH}"
-API_URL="${MANIFEED_API_URL:-http://127.0.0.1:8000}"
 API_KEY="${MANIFEED_WORKER_API_KEY:-}"
 
 log() {
@@ -54,7 +53,6 @@ Options:
   --non-interactive          Require values through flags/env vars.
   --binary PATH              Path to the worker-rss binary.
   --desktop-binary PATH      Path to the shared desktop binary.
-  --api-url URL              Backend base URL.
   --api-key TOKEN            Worker API key.
   --install-service          Also install a systemd --user service.
   --help                     Show this help.
@@ -80,9 +78,6 @@ maybe_enable_gui() {
 }
 
 prompt_cli() {
-  if [ -z "$API_URL" ]; then
-    read -r -p "Backend API URL: " API_URL
-  fi
   if [ -z "$API_KEY" ]; then
     read -r -s -p "Worker API key: " API_KEY
     printf '\n'
@@ -90,11 +85,6 @@ prompt_cli() {
 }
 
 prompt_gui() {
-  API_URL=$(zenity --entry \
-    --title="Manifeed Workers Installer" \
-    --text="Backend API URL" \
-    --entry-text="${API_URL}") || exit 1
-
   API_KEY=$(zenity --password \
     --title="Manifeed Workers Installer" \
     --text="Worker API key") || exit 1
@@ -119,10 +109,6 @@ parse_args() {
       --desktop-binary)
         shift
         DESKTOP_BINARY_PATH=${1:-}
-        ;;
-      --api-url)
-        shift
-        API_URL=${1:-}
         ;;
       --api-key)
         shift
@@ -192,7 +178,6 @@ show_summary_gui() {
     --text="Installation terminee.
 
 Worker: RSS
-Backend API: ${API_URL}
 Config: ${CONFIG_PATH}
 Install dir: ${WORKER_INSTALL_DIR}"
 }
@@ -206,7 +191,6 @@ main() {
   [ -f "$ICON_SOURCE_PATH" ] || die "desktop icon not found: ${ICON_SOURCE_PATH}"
 
   if [ "$NON_INTERACTIVE" -eq 1 ]; then
-    [ -n "$API_URL" ] || die "--api-url is required in non-interactive mode"
     [ -n "$API_KEY" ] || die "--api-key is required in non-interactive mode"
   else
     if maybe_enable_gui; then
@@ -216,7 +200,6 @@ main() {
     fi
   fi
 
-  [ -n "$API_URL" ] || die "backend API URL is required"
   [ -n "$API_KEY" ] || die "worker API key is required"
 
   mkdir -p "$WORKER_INSTALL_DIR" "$DESKTOP_INSTALL_DIR" "$BIN_DIR" "$CONFIG_DIR"
@@ -226,13 +209,11 @@ main() {
   if [ "$INSTALL_SERVICE" -eq 1 ]; then
     "${WORKER_INSTALL_DIR}/${WORKER_BINARY_NAME}" install \
       --config "$CONFIG_PATH" \
-      --api-url "$API_URL" \
       --api-key "$API_KEY" \
       --install-service
   else
     "${WORKER_INSTALL_DIR}/${WORKER_BINARY_NAME}" install \
       --config "$CONFIG_PATH" \
-      --api-url "$API_URL" \
       --api-key "$API_KEY"
   fi
 

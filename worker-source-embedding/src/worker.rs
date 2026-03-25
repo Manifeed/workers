@@ -46,10 +46,10 @@ pub trait ModelEmbedder {
     async fn embed(&mut self, inputs: &[String]) -> Result<Vec<Vec<f32>>>;
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EmbeddingResultSource {
     pub id: u64,
-    pub embedding: Vec<f32>,
+    pub embedding: Vec<f64>,
 }
 
 pub struct EmbeddingWorker<G, E> {
@@ -141,7 +141,7 @@ where
             .zip(vectors.into_iter())
             .map(|(source, embedding)| EmbeddingResultSource {
                 id: source.id,
-                embedding,
+                embedding: embedding.into_iter().map(f64::from).collect(),
             })
             .collect::<Vec<_>>();
         self.gateway

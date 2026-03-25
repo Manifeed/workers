@@ -13,7 +13,7 @@ les deux executables metier et l'application desktop partagee.
 
 ## Experience utilisateur actuelle
 
-- l'installation nominale ne demande que `api_url` et `api_key` ;
+- l'installation nominale ne demande plus que `api_key` ;
 - la configuration locale persistante est stockee dans `workers.json` ;
 - l'application `manifeed-workers` expose maintenant deux pages separees :
   - `Scraping`
@@ -37,7 +37,7 @@ cargo build --release -p worker-source-embedding -p worker-source-embedding-desk
 ## Notes d'architecture
 
 - `dist/` est un artefact genere localement et n'est plus versionne.
-- la configuration nominale des workers est persistante dans `workers.json`; les env vars restent des overrides experts.
+- la configuration nominale des workers est persistante dans `workers.json`, mais les URLs backend et plusieurs timings critiques sont maintenant figes dans les binaires.
 - l'app desktop partagee lit les status files locaux RSS/embedding et pilote les deux workers avec deux pages distinctes `Scraping` et `Embedding`.
 - les bundles et CLI verifient leur version via le manifest backend `/workers/releases/manifest`.
 - le worker d'embeddings telecharge et met en cache les artefacts du modele au besoin ; les binaires ONNX locaux du monorepo ne sont donc pas remigres comme sources versionnees.
