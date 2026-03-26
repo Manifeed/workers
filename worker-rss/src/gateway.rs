@@ -17,9 +17,7 @@ pub const RSS_CONTRACT_VERSION: &str = "rss-worker-result";
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WorkerSessionOpenRequest {
     pub task_type: String,
-    pub worker_class: String,
     pub worker_version: Option<String>,
-    pub client_fingerprint: Option<String>,
     pub session_ttl_seconds: u32,
 }
 
@@ -27,7 +25,6 @@ pub struct WorkerSessionOpenRequest {
 pub struct WorkerSessionOpenRead {
     pub session_id: String,
     pub task_type: String,
-    pub worker_class: String,
     pub worker_version: Option<String>,
     pub expires_at: DateTime<Utc>,
 }
@@ -36,9 +33,7 @@ pub struct WorkerSessionOpenRead {
 pub struct WorkerTaskClaimRequest {
     pub session_id: String,
     pub task_type: String,
-    pub worker_class: String,
     pub worker_version: Option<String>,
-    pub queue_lane: String,
     pub count: u32,
     pub lease_seconds: u32,
 }
@@ -48,14 +43,11 @@ pub struct WorkerLeaseRead {
     pub lease_id: String,
     pub trace_id: String,
     pub task_type: String,
-    pub worker_class: String,
     pub worker_version: Option<String>,
-    pub queue_lane: String,
     pub task_id: u64,
     pub execution_id: u64,
     pub payload_ref: String,
     pub payload: Value,
-    pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub signed_at: DateTime<Utc>,
     pub nonce: String,
@@ -68,7 +60,6 @@ pub struct WorkerTaskCompleteRequest {
     pub lease_id: String,
     pub trace_id: String,
     pub task_type: String,
-    pub worker_class: String,
     pub worker_version: Option<String>,
     pub signed_at: String,
     pub nonce: String,
@@ -82,39 +73,11 @@ pub struct WorkerTaskFailRequest {
     pub lease_id: String,
     pub trace_id: String,
     pub task_type: String,
-    pub worker_class: String,
     pub worker_version: Option<String>,
     pub signed_at: String,
     pub nonce: String,
     pub signature: String,
     pub error_message: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WorkerHeartbeatRequest {
-    pub session_id: String,
-    pub lease_id: Option<String>,
-    pub task_type: String,
-    pub worker_class: String,
-    pub worker_version: Option<String>,
-    pub signed_at: String,
-    pub nonce: String,
-    pub signature: String,
-    pub active_task_count: u32,
-    pub current_task_label: Option<String>,
-    pub last_error: Option<String>,
-    pub network_in_bytes: Option<u64>,
-    pub network_out_bytes: Option<u64>,
-    pub cpu_hint: Option<f64>,
-    pub gpu_hint: Option<f64>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WorkerHeartbeatRead {
-    pub ok: bool,
-    pub session_id: String,
-    pub expires_at: DateTime<Utc>,
-    pub seen_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

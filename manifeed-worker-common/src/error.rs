@@ -20,6 +20,8 @@ pub enum WorkerError {
     Crypto(String),
     #[error("process error: {0}")]
     Process(String),
+    #[error("response decode error: {0}")]
+    ResponseDecode(String),
     #[error("version error: {0}")]
     Version(String),
 }

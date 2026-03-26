@@ -17,9 +17,8 @@ use crate::error::{Result, RssWorkerError};
 use crate::model::{ClaimedRssTask, RawFeedScrapeResult, RssFeedPayload};
 use crate::gateway::{
     build_rss_task_result_payload, derive_hmac_secret, new_nonce, sign_payload, utc_timestamp_now,
-    WorkerHeartbeatRead, WorkerHeartbeatRequest, WorkerLeaseRead, WorkerSessionOpenRead,
-    WorkerSessionOpenRequest, WorkerTaskClaimRequest, WorkerTaskCompleteRequest,
-    WorkerTaskFailRequest,
+    WorkerLeaseRead, WorkerSessionOpenRead, WorkerSessionOpenRequest, WorkerTaskClaimRequest,
+    WorkerTaskCompleteRequest, WorkerTaskFailRequest,
 };
 use crate::worker::{RssGateway, RssGatewayState};
 
@@ -40,7 +39,6 @@ struct V2LeaseMetadata {
     lease_id: String,
     trace_id: String,
     task_type: String,
-    worker_class: String,
     worker_version: Option<String>,
 }
 
@@ -56,8 +54,6 @@ pub struct HttpRssGateway {
     authenticator: WorkerAuthenticator,
     lease_seconds: u32,
     session_ttl_seconds: u32,
-    worker_class: String,
-    queue_lane: String,
     task_type: String,
     worker_version: String,
     hmac_secret: String,
@@ -68,16 +64,13 @@ pub struct HttpRssGateway {
 
 impl HttpRssGateway {
     pub fn new(config: &RssWorkerConfig, status: WorkerStatusHandle) -> Result<Self> {
-        let normalized_queue_lane = normalize_queue_lane(&config.queue_lane);
         Ok(Self {
             api_client: ApiClient::new(config.api_url.clone())?
                 .with_traffic_observer(std::sync::Arc::new(status.clone())),
             authenticator: WorkerAuthenticator::new(config.auth.clone())?,
             lease_seconds: config.lease_seconds,
             session_ttl_seconds: config.session_ttl_seconds,
-            worker_class: config.worker_class.trim().to_string(),
-            queue_lane: normalized_queue_lane.clone(),
-            task_type: format!("rss.fetch.{normalized_queue_lane}"),
+            task_type: "rss.fetch".to_string(),
             worker_version: WORKER_VERSION.to_string(),
             hmac_secret: derive_hmac_secret(config.auth.api_key.as_str()),
             session: Arc::new(Mutex::new(None)),
@@ -107,7 +100,6 @@ impl HttpRssGateway {
                 lease_id: lease.lease_id,
                 trace_id: lease.trace_id,
                 task_type: lease.task_type,
-                worker_class: lease.worker_class,
                 worker_version: lease.worker_version,
             },
         ))
@@ -126,9 +118,7 @@ impl HttpRssGateway {
                 &WorkerTaskClaimRequest {
                     session_id: session.session_id.clone(),
                     task_type: self.task_type.clone(),
-                    worker_class: self.worker_class.clone(),
                     worker_version: Some(self.worker_version.clone()),
-                    queue_lane: self.queue_lane.clone(),
                     count: count.min(u32::MAX as usize) as u32,
                     lease_seconds: self.lease_seconds,
                 },
@@ -183,7 +173,6 @@ impl HttpRssGateway {
                 "signed_at": signed_at,
                 "task_type": metadata.task_type,
                 "trace_id": metadata.trace_id,
-                "worker_class": metadata.worker_class,
                 "worker_version": metadata.worker_version,
             }),
         )?;
@@ -195,7 +184,6 @@ impl HttpRssGateway {
                     lease_id: metadata.lease_id.clone(),
                     trace_id: metadata.trace_id.clone(),
                     task_type: metadata.task_type.clone(),
-                    worker_class: metadata.worker_class.clone(),
                     worker_version: metadata.worker_version.clone(),
                     signed_at,
                     nonce,
@@ -240,7 +228,6 @@ impl HttpRssGateway {
                 "signed_at": signed_at,
                 "task_type": metadata.task_type,
                 "trace_id": metadata.trace_id,
-                "worker_class": metadata.worker_class,
                 "worker_version": metadata.worker_version,
             }),
         )?;
@@ -252,7 +239,6 @@ impl HttpRssGateway {
                     lease_id: metadata.lease_id.clone(),
                     trace_id: metadata.trace_id.clone(),
                     task_type: metadata.task_type.clone(),
-                    worker_class: metadata.worker_class.clone(),
                     worker_version: metadata.worker_version.clone(),
                     signed_at,
                     nonce,
@@ -322,12 +308,7 @@ impl HttpRssGateway {
                 "/workers/sessions/open",
                 &WorkerSessionOpenRequest {
                     task_type: self.task_type.clone(),
-                    worker_class: self.worker_class.clone(),
                     worker_version: Some(self.worker_version.clone()),
-                    client_fingerprint: Some(format!(
-                        "worker-rss/{WORKER_VERSION}/{}",
-                        self.queue_lane
-                    )),
                     session_ttl_seconds: self.session_ttl_seconds,
                 },
                 Some(self.bearer_token()),
@@ -340,88 +321,6 @@ impl HttpRssGateway {
         self.store_session(next_session.clone())?;
         let _ = self.status.mark_server_connected();
         Ok(next_session)
-    }
-
-    async fn heartbeat_once_v2(&self, state: &RssGatewayState) -> Result<()> {
-        let session = self.ensure_v2_session().await?;
-        let active_lease_metadata = self.active_lease_metadata(state)?;
-        let status_snapshot = self.status.snapshot()?;
-        let signed_at = utc_timestamp_now();
-        let nonce = new_nonce();
-        let lease_id = active_lease_metadata
-            .as_ref()
-            .map(|metadata| metadata.lease_id.clone());
-        let task_type = active_lease_metadata
-            .as_ref()
-            .map(|metadata| metadata.task_type.clone())
-            .unwrap_or_else(|| self.task_type.clone());
-        let worker_class = active_lease_metadata
-            .as_ref()
-            .map(|metadata| metadata.worker_class.clone())
-            .unwrap_or_else(|| self.worker_class.clone());
-        let worker_version = active_lease_metadata
-            .as_ref()
-            .and_then(|metadata| metadata.worker_version.clone())
-            .or_else(|| Some(self.worker_version.clone()));
-        let signature = sign_payload(
-            &self.hmac_secret,
-            &json!({
-                "active_task_count": state.pending_tasks,
-                "cpu_hint": null,
-                "current_task_label": state.current_task_label,
-                "gpu_hint": null,
-                "last_error": state.last_error,
-                "lease_id": lease_id,
-                "network_in_bytes": status_snapshot.network_totals.bytes_received,
-                "network_out_bytes": status_snapshot.network_totals.bytes_sent,
-                "nonce": nonce,
-                "session_id": session.session_id,
-                "signed_at": signed_at,
-                "task_type": task_type,
-                "worker_class": worker_class,
-                "worker_version": worker_version,
-            }),
-        )?;
-        let response = self
-            .api_client
-            .post_json::<_, WorkerHeartbeatRead>(
-                "/workers/heartbeat",
-                &WorkerHeartbeatRequest {
-                    session_id: session.session_id,
-                    lease_id,
-                    task_type,
-                    worker_class,
-                    worker_version,
-                    signed_at,
-                    nonce,
-                    signature,
-                    active_task_count: state.pending_tasks,
-                    current_task_label: state.current_task_label.clone(),
-                    last_error: state.last_error.clone(),
-                    network_in_bytes: Some(status_snapshot.network_totals.bytes_received),
-                    network_out_bytes: Some(status_snapshot.network_totals.bytes_sent),
-                    cpu_hint: None,
-                    gpu_hint: None,
-                },
-                Some(self.bearer_token()),
-            )
-            .await?;
-        self.store_session(V2SessionState {
-            session_id: response.session_id,
-            expires_at: response.expires_at,
-        })?;
-        let _ = self.status.mark_server_connected();
-        Ok(())
-    }
-
-    fn active_lease_metadata(&self, state: &RssGatewayState) -> Result<Option<V2LeaseMetadata>> {
-        let Some(task_id) = state.current_task_id else {
-            return Ok(None);
-        };
-        let Some(execution_id) = state.current_execution_id else {
-            return Ok(None);
-        };
-        self.lease_metadata_for(task_id, execution_id)
     }
 
     fn current_session(&self) -> Result<Option<V2SessionState>> {
@@ -525,15 +424,6 @@ impl RssGateway for HttpRssGateway {
     async fn update_state(&self, state: RssGatewayState) -> Result<()> {
         let state = state.sanitized();
         self.apply_gateway_state(&state);
-        self.heartbeat_once_v2(&state).await
-    }
-}
-
-fn normalize_queue_lane(value: &str) -> String {
-    let normalized = value.trim().to_ascii_lowercase();
-    if normalized == "fast" {
-        "fast".to_string()
-    } else {
-        "safe".to_string()
+        Ok(())
     }
 }

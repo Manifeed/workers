@@ -31,8 +31,6 @@ pub struct EmbeddingWorkerConfig {
     pub poll_seconds: u64,
     pub lease_seconds: u32,
     pub session_ttl_seconds: u32,
-    pub worker_class: String,
-    pub queue_lane: String,
     pub inference_batch_size: usize,
     pub acceleration_mode: AccelerationMode,
     pub execution_backend: ExecutionBackend,
@@ -101,10 +99,6 @@ impl EmbeddingWorkerConfig {
                 "MANIFEED_EMBEDDING_SESSION_TTL_SECONDS",
                 3600u32,
             )?,
-            worker_class: optional_env_string("MANIFEED_EMBEDDING_WORKER_CLASS")
-                .unwrap_or_else(|| "external".to_string()),
-            queue_lane: optional_env_string("MANIFEED_EMBEDDING_QUEUE_LANE")
-                .unwrap_or_else(|| "safe".to_string()),
             inference_batch_size: stored.embedding.inference_batch_size.max(1),
             acceleration_mode,
             execution_backend,

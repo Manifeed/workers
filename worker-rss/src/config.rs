@@ -25,8 +25,6 @@ pub struct RssWorkerConfigOverrides {
 #[derive(Clone, Debug)]
 pub struct RssWorkerConfig {
     pub api_url: String,
-    pub worker_class: String,
-    pub queue_lane: String,
     pub session_ttl_seconds: u32,
     pub poll_seconds: u64,
     pub lease_seconds: u32,
@@ -63,10 +61,6 @@ impl RssWorkerConfig {
 
         Ok(Self {
             api_url: DEFAULT_API_URL.to_string(),
-            worker_class: optional_env_string("MANIFEED_RSS_WORKER_CLASS")
-                .unwrap_or_else(|| "external".to_string()),
-            queue_lane: optional_env_string("MANIFEED_RSS_QUEUE_LANE")
-                .unwrap_or_else(|| "safe".to_string()),
             session_ttl_seconds: env_or_value("MANIFEED_RSS_SESSION_TTL_SECONDS", 3600u32)?,
             poll_seconds: BUILTIN_RSS_POLL_SECONDS,
             lease_seconds: BUILTIN_RSS_LEASE_SECONDS,

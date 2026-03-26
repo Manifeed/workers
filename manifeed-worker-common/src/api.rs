@@ -144,6 +144,25 @@ impl ApiClient {
                 message,
             });
         }
-        Ok((serde_json::from_slice::<T>(&bytes)?, bytes.len()))
+        let payload = serde_json::from_slice::<T>(&bytes).map_err(|error| {
+            let preview = response_body_preview(&bytes);
+            WorkerError::ResponseDecode(format!(
+                "expected {} but received invalid JSON payload: {error}; body={preview}",
+                std::any::type_name::<T>()
+            ))
+        })?;
+        Ok((payload, bytes.len()))
+    }
+}
+
+fn response_body_preview(bytes: &[u8]) -> String {
+    const MAX_PREVIEW_CHARS: usize = 400;
+
+    let body = String::from_utf8_lossy(bytes);
+    let preview = body.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
+    if body.chars().count() > MAX_PREVIEW_CHARS {
+        format!("{preview}...")
+    } else {
+        preview
     }
 }

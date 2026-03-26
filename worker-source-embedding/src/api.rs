@@ -36,7 +36,7 @@ struct V2LeaseMetadata {
     lease_id: String,
     trace_id: String,
     task_type: String,
-    worker_class: String,
+    worker_version: Option<String>,
 }
 
 #[derive(Clone)]
@@ -50,8 +50,6 @@ pub struct HttpEmbeddingGateway {
     authenticator: WorkerAuthenticator,
     lease_seconds: u32,
     session_ttl_seconds: u32,
-    worker_class: String,
-    queue_lane: String,
     task_type: String,
     status: WorkerStatusHandle,
     worker_version: String,
@@ -62,16 +60,13 @@ pub struct HttpEmbeddingGateway {
 
 impl HttpEmbeddingGateway {
     pub fn new(config: &EmbeddingWorkerConfig, status: WorkerStatusHandle) -> Result<Self> {
-        let normalized_queue_lane = normalize_queue_lane(&config.queue_lane);
         Ok(Self {
             api_client: ApiClient::new(config.api_url.clone())?
                 .with_traffic_observer(std::sync::Arc::new(status.clone())),
             authenticator: WorkerAuthenticator::new(config.auth.clone())?,
             lease_seconds: config.lease_seconds,
             session_ttl_seconds: config.session_ttl_seconds,
-            worker_class: config.worker_class.trim().to_string(),
-            queue_lane: normalized_queue_lane.clone(),
-            task_type: format!("embed.source"),
+            task_type: "embed.source".to_string(),
             status,
             worker_version: config.worker_version.clone(),
             hmac_secret: derive_hmac_secret(config.auth.api_key.as_str()),
@@ -96,7 +91,7 @@ impl HttpEmbeddingGateway {
                 lease_id: lease.lease_id,
                 trace_id: lease.trace_id,
                 task_type: lease.task_type,
-                worker_class: lease.worker_class,
+                worker_version: lease.worker_version,
             },
         ))
     }
@@ -118,9 +113,7 @@ impl HttpEmbeddingGateway {
                 &WorkerTaskClaimRequest {
                     session_id: session.session_id.clone(),
                     task_type: self.task_type.clone(),
-                    worker_class: self.worker_class.clone(),
                     worker_version: Some(self.worker_version.clone()),
-                    queue_lane: self.queue_lane.clone(),
                     count: 1,
                     lease_seconds: self.lease_seconds,
                 },
@@ -186,8 +179,7 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "signed_at": signed_at,
             "task_type": metadata.task_type,
             "trace_id": metadata.trace_id,
-            "worker_class": metadata.worker_class,
-            "worker_version": request_worker_version,
+            "worker_version": request_worker_version.or(metadata.worker_version.clone()),
         });
         let signature = sign_payload(
             &self.hmac_secret,
@@ -198,7 +190,6 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "lease_id": metadata.lease_id.clone(),
             "trace_id": metadata.trace_id.clone(),
             "task_type": metadata.task_type.clone(),
-            "worker_class": metadata.worker_class.clone(),
             "worker_version": Some(worker_version),
             "signed_at": signed_at,
             "nonce": nonce,
@@ -264,8 +255,7 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "signed_at": signed_at,
             "task_type": metadata.task_type,
             "trace_id": metadata.trace_id,
-            "worker_class": metadata.worker_class,
-            "worker_version": request_worker_version,
+            "worker_version": request_worker_version.or(metadata.worker_version.clone()),
         });
         let signature = sign_payload(
             &self.hmac_secret,
@@ -276,7 +266,6 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "lease_id": metadata.lease_id.clone(),
             "trace_id": metadata.trace_id.clone(),
             "task_type": metadata.task_type.clone(),
-            "worker_class": metadata.worker_class.clone(),
             "worker_version": Some(worker_version),
             "signed_at": signed_at,
             "nonce": nonce,
@@ -329,13 +318,7 @@ impl HttpEmbeddingGateway {
                 "/workers/sessions/open",
                 &WorkerSessionOpenRequest {
                     task_type: self.task_type.clone(),
-                    worker_class: self.worker_class.clone(),
                     worker_version: Some(self.worker_version.clone()),
-                    client_fingerprint: Some(format!(
-                        "worker-source-embedding/{}/{}",
-                        self.worker_version,
-                        self.queue_lane
-                    )),
                     session_ttl_seconds: self.session_ttl_seconds,
                 },
                 Some(self.bearer_token()),
@@ -371,14 +354,5 @@ impl HttpEmbeddingGateway {
         self.lease_metadata.lock().map_err(|_| {
             EmbeddingWorkerError::Runtime("lease metadata mutex poisoned".to_string())
         })
-    }
-}
-
-fn normalize_queue_lane(value: &str) -> String {
-    let normalized = value.trim().to_ascii_lowercase();
-    if normalized == "fast" {
-        "fast".to_string()
-    } else {
-        "safe".to_string()
     }
 }

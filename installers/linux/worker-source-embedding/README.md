@@ -40,20 +40,20 @@ Depuis la racine du repo `workers` :
 ### Mode interactif
 
 ```bash
-./dist/linux/worker-source-embedding/install.sh --cli
+./installers/linux/worker-source-embedding/install.sh --cli
 ```
 
 ### Mode non interactif
 
 ```bash
-./dist/linux/worker-source-embedding/install.sh --non-interactive \
+./installers/linux/worker-source-embedding/install.sh --non-interactive \
   --api-key mfk_live_xxxxx
 ```
 
 ### Installation avec service utilisateur
 
 ```bash
-./dist/linux/worker-source-embedding/install.sh --install-service
+./installers/linux/worker-source-embedding/install.sh --install-service
 ```
 
 ## Lanceurs installes
