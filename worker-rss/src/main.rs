@@ -296,7 +296,9 @@ fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-fn version_command(_args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn version_command(
+    _args: CommonConfigArgs,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let version_cache_path = app_paths()?
         .version_cache_dir()
         .join(format!("{}.json", WorkerType::RssScrapper.cli_product()));

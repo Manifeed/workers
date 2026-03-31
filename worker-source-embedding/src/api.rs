@@ -13,9 +13,9 @@ use tracing::warn;
 use crate::config::EmbeddingWorkerConfig;
 use crate::error::{EmbeddingWorkerError, Result};
 use crate::gateway::{
-    build_embedding_task_result_payload, canonical_json, derive_hmac_secret, new_nonce, sign_payload,
-    utc_timestamp_now, WorkerLeaseRead, WorkerSessionOpenRead, WorkerSessionOpenRequest,
-    WorkerTaskClaimRequest,
+    build_embedding_task_result_payload, canonical_json, derive_hmac_secret, new_nonce,
+    sign_payload, utc_timestamp_now, WorkerLeaseRead, WorkerSessionOpenRead,
+    WorkerSessionOpenRequest, WorkerTaskClaimRequest,
 };
 use crate::worker::{
     ClaimedEmbeddingTask, EmbeddingGateway, EmbeddingResultSource, EmbeddingSourceInput,
@@ -181,10 +181,7 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "trace_id": metadata.trace_id,
             "worker_version": request_worker_version.or(metadata.worker_version.clone()),
         });
-        let signature = sign_payload(
-            &self.hmac_secret,
-            &signature_payload,
-        )?;
+        let signature = sign_payload(&self.hmac_secret, &signature_payload)?;
         let request_body = canonical_json(&json!({
             "session_id": metadata.session_id.clone(),
             "lease_id": metadata.lease_id.clone(),
@@ -257,10 +254,7 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "trace_id": metadata.trace_id,
             "worker_version": request_worker_version.or(metadata.worker_version.clone()),
         });
-        let signature = sign_payload(
-            &self.hmac_secret,
-            &signature_payload,
-        )?;
+        let signature = sign_payload(&self.hmac_secret, &signature_payload)?;
         let request_body = canonical_json(&json!({
             "session_id": metadata.session_id.clone(),
             "lease_id": metadata.lease_id.clone(),
@@ -351,8 +345,8 @@ impl HttpEmbeddingGateway {
     fn lock_lease_metadata(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, HashMap<(u64, u64), V2LeaseMetadata>>> {
-        self.lease_metadata.lock().map_err(|_| {
-            EmbeddingWorkerError::Runtime("lease metadata mutex poisoned".to_string())
-        })
+        self.lease_metadata
+            .lock()
+            .map_err(|_| EmbeddingWorkerError::Runtime("lease metadata mutex poisoned".to_string()))
     }
 }

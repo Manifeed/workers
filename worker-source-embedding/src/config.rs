@@ -95,10 +95,7 @@ impl EmbeddingWorkerConfig {
             api_url: DEFAULT_API_URL.to_string(),
             poll_seconds: BUILTIN_EMBEDDING_POLL_SECONDS,
             lease_seconds: BUILTIN_EMBEDDING_LEASE_SECONDS,
-            session_ttl_seconds: env_or_value(
-                "MANIFEED_EMBEDDING_SESSION_TTL_SECONDS",
-                3600u32,
-            )?,
+            session_ttl_seconds: env_or_value("MANIFEED_EMBEDDING_SESSION_TTL_SECONDS", 3600u32)?,
             inference_batch_size: stored.embedding.inference_batch_size.max(1),
             acceleration_mode,
             execution_backend,

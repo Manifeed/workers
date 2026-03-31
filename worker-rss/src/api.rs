@@ -14,12 +14,12 @@ use tracing::warn;
 
 use crate::config::RssWorkerConfig;
 use crate::error::{Result, RssWorkerError};
-use crate::model::{ClaimedRssTask, RawFeedScrapeResult, RssFeedPayload};
 use crate::gateway::{
     build_rss_task_result_payload, derive_hmac_secret, new_nonce, sign_payload, utc_timestamp_now,
     WorkerLeaseRead, WorkerSessionOpenRead, WorkerSessionOpenRequest, WorkerTaskClaimRequest,
     WorkerTaskCompleteRequest, WorkerTaskFailRequest,
 };
+use crate::model::{ClaimedRssTask, RawFeedScrapeResult, RssFeedPayload};
 use crate::worker::{RssGateway, RssGatewayState};
 
 const NETWORK_RETRY_DELAY_SECONDS: u64 = 5;
@@ -200,7 +200,8 @@ impl HttpRssGateway {
     }
 
     async fn fail_once(&self, task_id: u64, execution_id: u64, error_message: &str) -> Result<()> {
-        self.fail_once_v2(task_id, execution_id, error_message).await
+        self.fail_once_v2(task_id, execution_id, error_message)
+            .await
     }
 
     async fn fail_once_v2(
@@ -338,7 +339,11 @@ impl HttpRssGateway {
         Ok(())
     }
 
-    fn lease_metadata_for(&self, task_id: u64, execution_id: u64) -> Result<Option<V2LeaseMetadata>> {
+    fn lease_metadata_for(
+        &self,
+        task_id: u64,
+        execution_id: u64,
+    ) -> Result<Option<V2LeaseMetadata>> {
         Ok(self
             .lock_lease_metadata()?
             .get(&(task_id, execution_id))

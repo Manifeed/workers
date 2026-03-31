@@ -15,7 +15,9 @@ use worker_source_embedding::config::{
     EmbeddingWorkerConfig, EmbeddingWorkerConfigOverrides, FIXED_EMBEDDING_MODEL_NAME,
 };
 use worker_source_embedding::huggingface::HuggingFaceOnnxModelManager;
-use worker_source_embedding::runtime::{ensure_ort_runtime_loaded, probe_system, ExecutionBackend};
+use worker_source_embedding::runtime::{
+    probe_system, verify_execution_backend_support, ExecutionBackend,
+};
 use worker_source_embedding::worker::EmbeddingWorker;
 
 const RUN_ERROR_SLEEP_SECONDS: u64 = 3;
@@ -166,8 +168,11 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
     })?;
     validate_release_status(&config.api_url)?;
 
+    let ort_runtime_path = verify_execution_backend_support(
+        config.execution_backend,
+        config.ort_dylib_path.as_deref(),
+    )?;
     let probe = probe_system(config.execution_backend, config.ort_dylib_path.as_deref());
-    let ort_runtime_path = ensure_ort_runtime_loaded(config.ort_dylib_path.as_deref())?;
     let status = WorkerStatusHandle::new(
         config.status_file_path.clone(),
         WorkerStatusInit {

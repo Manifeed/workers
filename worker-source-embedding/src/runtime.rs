@@ -111,10 +111,20 @@ pub struct RuntimeProbe {
     pub has_nvidia_smi: bool,
     pub has_cuda_driver: bool,
     pub has_vulkan_loader: bool,
+    pub ort_runtime_path: Option<String>,
+    pub available_execution_providers: Vec<ExecutionBackend>,
+    pub runtime_load_error: Option<String>,
     pub recommended_backend: ExecutionBackend,
     pub recommended_runtime_bundle: RuntimeBundle,
     pub ort_dylib_candidates: Vec<String>,
     pub notes: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct RuntimeSupport {
+    ort_runtime_path: Option<PathBuf>,
+    available_execution_providers: Vec<ExecutionBackend>,
+    runtime_load_error: Option<String>,
 }
 
 pub fn probe_system(
@@ -166,6 +176,7 @@ pub fn probe_system(
         .into_iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>();
+    let runtime_support = probe_runtime_support(explicit_ort_dylib_path);
 
     let (recommended_backend, recommended_runtime_bundle) = recommend_runtime(
         preferred_backend,
@@ -174,6 +185,22 @@ pub fn probe_system(
         has_cuda_driver,
         has_vulkan_loader,
     );
+    if let Some(runtime_load_error) = runtime_support.runtime_load_error.as_ref() {
+        notes.push(format!(
+            "unable to inspect installed ONNX Runtime providers: {runtime_load_error}"
+        ));
+    } else if matches!(
+        recommended_backend,
+        ExecutionBackend::Cuda | ExecutionBackend::WebGpu
+    ) && !runtime_support
+        .available_execution_providers
+        .contains(&recommended_backend)
+    {
+        notes.push(format!(
+            "GPU hardware was detected, but the installed ONNX Runtime currently exposes {}; switch acceleration to auto/cpu or reinstall the worker runtime for {recommended_backend}",
+            format_execution_backends(&runtime_support.available_execution_providers),
+        ));
+    }
 
     RuntimeProbe {
         os,
@@ -186,6 +213,12 @@ pub fn probe_system(
         has_nvidia_smi,
         has_cuda_driver,
         has_vulkan_loader,
+        ort_runtime_path: runtime_support
+            .ort_runtime_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        available_execution_providers: runtime_support.available_execution_providers,
+        runtime_load_error: runtime_support.runtime_load_error,
         recommended_backend,
         recommended_runtime_bundle,
         ort_dylib_candidates,
@@ -225,6 +258,41 @@ pub fn ensure_ort_runtime_loaded(explicit_ort_dylib_path: Option<&Path>) -> Resu
     });
 
     loaded.clone().map_err(EmbeddingWorkerError::Runtime)
+}
+
+pub fn verify_execution_backend_support(
+    requested_backend: ExecutionBackend,
+    explicit_ort_dylib_path: Option<&Path>,
+) -> Result<PathBuf> {
+    let runtime_support = probe_runtime_support(explicit_ort_dylib_path);
+    let ort_runtime_path = runtime_support.ort_runtime_path.ok_or_else(|| {
+        EmbeddingWorkerError::Runtime(
+            runtime_support
+                .runtime_load_error
+                .unwrap_or_else(|| "unable to load ONNX Runtime".to_string()),
+        )
+    })?;
+
+    if matches!(
+        requested_backend,
+        ExecutionBackend::Auto | ExecutionBackend::Cpu
+    ) {
+        return Ok(ort_runtime_path);
+    }
+
+    if runtime_support
+        .available_execution_providers
+        .contains(&requested_backend)
+    {
+        return Ok(ort_runtime_path);
+    }
+
+    Err(EmbeddingWorkerError::Runtime(format!(
+        "{} execution provider is not enabled in this build; loaded runtime: {}; available execution providers: {}",
+        requested_backend.as_str().to_ascii_uppercase(),
+        ort_runtime_path.display(),
+        format_execution_backends(&runtime_support.available_execution_providers),
+    )))
 }
 
 pub fn execution_providers(
@@ -267,6 +335,33 @@ pub fn available_execution_providers() -> Vec<ExecutionBackend> {
     }
     providers.push(ExecutionBackend::Cpu);
     providers
+}
+
+fn probe_runtime_support(explicit_ort_dylib_path: Option<&Path>) -> RuntimeSupport {
+    match ensure_ort_runtime_loaded(explicit_ort_dylib_path) {
+        Ok(ort_runtime_path) => RuntimeSupport {
+            ort_runtime_path: Some(ort_runtime_path),
+            available_execution_providers: available_execution_providers(),
+            runtime_load_error: None,
+        },
+        Err(error) => RuntimeSupport {
+            ort_runtime_path: None,
+            available_execution_providers: Vec::new(),
+            runtime_load_error: Some(error.to_string()),
+        },
+    }
+}
+
+fn format_execution_backends(backends: &[ExecutionBackend]) -> String {
+    if backends.is_empty() {
+        return "none".to_string();
+    }
+
+    backends
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn recommend_runtime(

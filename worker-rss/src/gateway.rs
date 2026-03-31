@@ -223,7 +223,9 @@ fn serialize_json_ascii(value: &Value) -> Result<String> {
             let mut serialized_entries = Vec::with_capacity(keys.len());
             for key in keys {
                 let item_value = object.get(key).ok_or_else(|| {
-                    RssWorkerError::Runtime("missing object entry during canonical json serialization".to_string())
+                    RssWorkerError::Runtime(
+                        "missing object entry during canonical json serialization".to_string(),
+                    )
                 })?;
                 serialized_entries.push(format!(
                     "{}:{}",

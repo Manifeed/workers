@@ -25,36 +25,36 @@ pub const ORANGE: egui::Color32 = egui::Color32::from_rgb(200, 130, 35);
 pub const MUTED: egui::Color32 = egui::Color32::from_rgb(102, 111, 118);
 
 pub fn configure(ctx: &egui::Context) {
-	let mut style = (*ctx.style()).clone();
-	style.spacing.item_spacing = egui::vec2(12.0, 10.0);
-	style.spacing.button_padding = egui::vec2(14.0, 8.0);
-	style.visuals.widgets.inactive.corner_radius = 10.0.into();
-	style.visuals.widgets.active.corner_radius = 10.0.into();
-	style.visuals.widgets.hovered.corner_radius = 10.0.into();
-	style.visuals.window_corner_radius = 14.0.into();
-	style.visuals.panel_fill = LIGHT_BG;
-	style.visuals.window_fill = LIGHT_BG;
-	style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(238, 233, 225);
-	style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(228, 221, 210);
-	style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(214, 205, 192);
-	style.visuals.selection.bg_fill = TEAL;
-	ctx.set_style(style);
+    let mut style = (*ctx.style()).clone();
+    style.spacing.item_spacing = egui::vec2(12.0, 10.0);
+    style.spacing.button_padding = egui::vec2(14.0, 8.0);
+    style.visuals.widgets.inactive.corner_radius = 10.0.into();
+    style.visuals.widgets.active.corner_radius = 10.0.into();
+    style.visuals.widgets.hovered.corner_radius = 10.0.into();
+    style.visuals.window_corner_radius = 14.0.into();
+    style.visuals.panel_fill = LIGHT_BG;
+    style.visuals.window_fill = LIGHT_BG;
+    style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(238, 233, 225);
+    style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(228, 221, 210);
+    style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(214, 205, 192);
+    style.visuals.selection.bg_fill = TEAL;
+    ctx.set_style(style);
 }
 
 pub fn worker_accent(wt: WorkerType) -> egui::Color32 {
-	match wt {
-		WorkerType::RssScrapper => TEAL,
-		WorkerType::SourceEmbedding => AMBER,
-	}
+    match wt {
+        WorkerType::RssScrapper => TEAL,
+        WorkerType::SourceEmbedding => AMBER,
+    }
 }
 
 pub fn phase_color(phase: &str) -> egui::Color32 {
-	match phase {
-		"idle" => GREEN,
-		"processing" => ORANGE,
-		"error" => RED,
-		"starting" => TEAL,
-		"stopped" => MUTED,
-		_ => TEXT_SECONDARY,
-	}
+    match phase {
+        "idle" => GREEN,
+        "processing" => ORANGE,
+        "error" => RED,
+        "starting" => TEAL,
+        "stopped" => MUTED,
+        _ => TEXT_SECONDARY,
+    }
 }
