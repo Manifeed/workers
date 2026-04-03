@@ -28,7 +28,8 @@ pub struct RssSource {
     pub title: String,
     pub url: String,
     pub summary: Option<String>,
-    pub author: Option<String>,
+    #[serde(default)]
+    pub authors: Vec<String>,
     pub published_at: Option<DateTime<Utc>>,
     pub image_url: Option<String>,
 }
