@@ -47,15 +47,17 @@ impl WorkerType {
 
     pub fn cli_product(self) -> &'static str {
         match self {
-            Self::RssScrapper => "rss_cli",
-            Self::SourceEmbedding => "embedding_cli",
+            Self::RssScrapper => "rss_worker_bundle",
+            Self::SourceEmbedding => "embedding_worker_bundle",
         }
     }
 
     pub fn desktop_bundle_product(self) -> &'static str {
-        match self {
-            Self::RssScrapper => "rss_desktop_bundle",
-            Self::SourceEmbedding => "embedding_desktop_bundle",
+        let _ = self;
+        if std::env::consts::OS == "linux" {
+            "manifeed-workers-desktop"
+        } else {
+            "workers_desktop_app"
         }
     }
 }

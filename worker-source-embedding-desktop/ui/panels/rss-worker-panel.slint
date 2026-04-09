@@ -1,0 +1,8 @@
+import { RssWorkerCard } from "../cards/rss-worker-card.slint";
+
+export component RssWorkerPanel inherits RssWorkerCard {
+	in property <length> card_width: 0px;
+
+	min-width: root.card_width;
+	max-width: root.card_width;
+}

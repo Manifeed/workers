@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: manifeed-workers
+Source: https://manifeed.local
+
+Files: *
+Copyright: 2026 Manifeed
+License: Proprietary
+ Redistribution is restricted to the Manifeed project and its operators.

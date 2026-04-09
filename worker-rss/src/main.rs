@@ -30,7 +30,6 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     Run(RunArgs),
-    Install(InstallArgs),
     Config(ConfigArgs),
     Doctor(CommonConfigArgs),
     Version(CommonConfigArgs),
@@ -51,16 +50,6 @@ struct RunArgs {
     api_key: Option<String>,
     #[arg(long)]
     log: bool,
-}
-
-#[derive(Args, Clone, Debug)]
-struct InstallArgs {
-    #[arg(long)]
-    config: Option<PathBuf>,
-    #[arg(long)]
-    api_key: String,
-    #[arg(long)]
-    install_service: bool,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -87,6 +76,7 @@ enum ConfigCommand {
 
 #[derive(Clone, Debug, ValueEnum)]
 enum ConfigField {
+    ApiUrl,
     ApiKey,
     ServiceMode,
 }
@@ -115,7 +105,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     match cli.command.unwrap_or(Command::Run(RunArgs::default())) {
         Command::Run(args) => run_command(args).await,
-        Command::Install(args) => install_command(args),
         Command::Config(args) => config_command(args),
         Command::Doctor(args) => doctor_command(args),
         Command::Version(args) => version_command(args),
@@ -169,48 +158,19 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error + Se
                     tokio::time::sleep(Duration::from_secs(config.poll_seconds)).await;
                 }
             }
+            Err(error) if error.is_auth_error() => {
+                let label = error.user_facing_message();
+                let _ = status.mark_error(label.clone());
+                error!("worker_rss fatal authentication error: {}", error);
+                return Err(Box::new(error));
+            }
             Err(error) => {
-                let _ = status.mark_error(error.to_string());
+                let _ = status.mark_error(error.user_facing_message());
                 error!("worker_rss iteration failed: {}", error);
                 tokio::time::sleep(Duration::from_secs(RUN_ERROR_SLEEP_SECONDS)).await;
             }
         }
     }
-}
-
-fn install_command(args: InstallArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let current_exe = std::env::current_exe()?;
-    let config_path = resolve_workers_config_path(args.config.as_deref())?;
-    let (_, mut config) = load_workers_config(Some(config_path.as_path()))?;
-    config.install_worker(
-        WorkerType::RssScrapper,
-        args.api_key.clone(),
-        Some(current_exe.clone()),
-    );
-    if args.install_service {
-        config.rss.service_mode = ServiceMode::Background;
-    }
-    save_workers_config(&config_path, &config)?;
-
-    if args.install_service {
-        install_user_service(
-            WorkerType::RssScrapper,
-            current_exe.as_path(),
-            config_path.as_path(),
-        )?;
-    }
-
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({
-            "ok": true,
-            "worker_type": WorkerType::RssScrapper.as_str(),
-            "config_path": config_path,
-            "binary_path": current_exe,
-            "service_mode": config.rss.service_mode,
-        }))?
-    );
-    Ok(())
 }
 
 fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -229,11 +189,12 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error + Se
                 "{}",
                 serde_json::to_string_pretty(&json!({
                     "config_path": config_path,
+                    "api_url": config_value.api_url,
                     "rss": {
                         "enabled": config_value.rss.enabled,
                         "api_key": api_key,
                         "service_mode": config_value.rss.service_mode,
-                        "binary_path": config_value.rss.binary_path,
+                        "installed_version": config_value.rss.installed_version,
                         "max_in_flight_requests": config_value.rss.max_in_flight_requests,
                     }
                 }))?
@@ -248,6 +209,7 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error + Se
             let config_path = resolve_workers_config_path(config.as_deref())?;
             let (_, mut config_value) = load_workers_config(Some(config_path.as_path()))?;
             match field {
+                ConfigField::ApiUrl => config_value.api_url = value,
                 ConfigField::ApiKey => config_value.rss.api_key = value,
                 ConfigField::ServiceMode => {
                     config_value.rss.service_mode = parse_service_mode(&value)?;
@@ -286,9 +248,10 @@ fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Erro
             "worker_type": WorkerType::RssScrapper.as_str(),
             "app_version": APP_VERSION,
             "config_path": config.config_path,
+            "api_url": config.api_url,
             "status_file": worker_paths.status_file,
             "log_file": worker_paths.log_file,
-            "binary_path": stored_config.rss.binary_path,
+            "installed_version": stored_config.rss.installed_version,
             "connection": connection,
             "release": release,
         }))?
@@ -323,11 +286,7 @@ fn service_command(args: ServiceArgs) -> Result<(), Box<dyn std::error::Error + 
     match args.command {
         ServiceCommand::Install { config } => {
             let config_path = resolve_workers_config_path(config.as_deref())?;
-            let (_, config_value) = load_workers_config(Some(config_path.as_path()))?;
-            let binary_path = config_value
-                .rss
-                .binary_path
-                .unwrap_or(std::env::current_exe()?);
+            let binary_path = std::env::current_exe()?;
             install_user_service(
                 WorkerType::RssScrapper,
                 binary_path.as_path(),

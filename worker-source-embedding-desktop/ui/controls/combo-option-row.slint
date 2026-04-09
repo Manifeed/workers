@@ -1,0 +1,32 @@
+import { Theme } from "../theme.slint";
+
+export component ComboOptionRow inherits Rectangle {
+	in property <string> text;
+	in property <bool> selected: false;
+	callback activate;
+
+	height: Theme.btn-height;
+	border-radius: Theme.rad-s;
+	background: touch.pressed ? Theme.control-hover-bg : selected ? Theme.control-selected-bg : touch.has-hover ? Theme.control-hover-bg : transparent;
+	clip: true;
+
+	HorizontalLayout {
+		padding-left: Theme.control-padding-x;
+		padding-right: Theme.control-padding-x;
+
+		Text {
+			text: root.text;
+			color: Theme.control-text;
+			font-family: Theme.font-ui;
+			font-size: Theme.fs-body;
+			font-weight: root.selected ? Theme.fw-bold : Theme.fw-semibold;
+			vertical-alignment: center;
+		}
+	}
+
+	touch := TouchArea {
+		clicked => {
+			root.activate();
+		}
+	}
+}

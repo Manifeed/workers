@@ -24,7 +24,10 @@ impl ApiClient {
             return Err(WorkerError::Config("MANIFEED_API_URL is empty".to_string()));
         }
         let client = reqwest::Client::builder()
-            .user_agent("manifeed-worker-rust/0.1.0")
+            .user_agent(format!(
+                "manifeed-worker-rust/{}",
+                env!("CARGO_PKG_VERSION")
+            ))
             .build()?;
         Ok(Self {
             base_url,
@@ -134,9 +137,15 @@ impl ApiClient {
                 .ok()
                 .and_then(|value| {
                     value
+                        .get("message")
+                        .and_then(|detail| detail.as_str())
+                        .map(str::to_string)
+                        .or_else(|| {
+                            value
                         .get("detail")
                         .and_then(|detail| detail.as_str())
                         .map(str::to_string)
+                        })
                 })
                 .unwrap_or_else(|| String::from_utf8_lossy(&bytes).to_string());
             return Err(WorkerError::Api {

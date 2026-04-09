@@ -1,0 +1,165 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { NoticeView, SettingsCardView, WorkerCardView } from "view-types.slint";
+import { NoticeBanner } from "components/notice-banner.slint";
+import { DashboardHeader } from "layout/dashboard-header.slint";
+import { DashboardSingleColumn } from "layout/dashboard-single-column.slint";
+import { DashboardTwoColumns } from "layout/dashboard-two-columns.slint";
+import { DashboardThreeColumns } from "layout/dashboard-three-columns.slint";
+
+export component WorkersDashboardWindow inherits Window {
+	title: "Manifeed Workers";
+	preferred-width: 860px;
+	preferred-height: 860px;
+	min-width: 560px;
+	min-height: 480px;
+	background: Theme.page-bg;
+
+	in-out property <string> api_url: "";
+	in-out property <string> rss_api_key: "";
+	in-out property <int> rss_run_mode_index: 0;
+	in-out property <int> rss_max_requests: 5;
+	in-out property <string> embedding_api_key: "";
+	in-out property <int> embedding_run_mode_index: 0;
+	in-out property <int> embedding_acceleration_index: 0;
+	in-out property <int> embedding_batch_size: 1;
+
+	in property <bool> app_busy: false;
+	in property <NoticeView> global_notice;
+	in property <SettingsCardView> settings_card;
+	in property <WorkerCardView> rss_card;
+	in property <WorkerCardView> embedding_card;
+
+	callback request_save_changes();
+	callback request_check_updates();
+	callback request_open_desktop_download();
+	callback request_open_desktop_release_notes();
+	callback request_rss_check_api();
+	callback request_rss_install_or_update();
+	callback request_rss_toggle_run();
+	callback request_rss_uninstall();
+	callback request_embedding_check_api();
+	callback request_embedding_install_or_update();
+	callback request_embedding_toggle_run();
+	callback request_embedding_uninstall();
+
+	private property <int> card-column-count:
+		root.width >= Theme.bp-grid-3 ? 3 :
+		root.width >= Theme.bp-grid-2 ? 2 :
+		1;
+	private property <length> card-gutter: Theme.sp-xl;
+	private property <length> content-width: root.width - Theme.sp-2xl * 2;
+	private property <length> card-column-width:
+		(root.content-width
+		 - (root.card-column-count == 3 ? root.card-gutter * 2 :
+		    root.card-column-count == 2 ? root.card-gutter :
+		    0px))
+		/ root.card-column-count;
+
+	ScrollView {
+		VerticalLayout {
+			alignment: start;
+			padding: Theme.sp-2xl;
+			spacing: Theme.sp-2xl;
+
+			DashboardHeader {
+				width: root.content-width;
+			}
+
+			if root.global_notice.visible : NoticeBanner {
+				width: root.content-width;
+				notice: root.global_notice;
+			}
+
+			if root.card-column-count == 1 : DashboardSingleColumn {
+				content_width: root.content-width;
+				card_gutter: root.card-gutter;
+				card_width: root.card-column-width;
+				api_url <=> root.api_url;
+				rss_api_key <=> root.rss_api_key;
+				rss_run_mode_index <=> root.rss_run_mode_index;
+				rss_max_requests <=> root.rss_max_requests;
+				embedding_api_key <=> root.embedding_api_key;
+				embedding_run_mode_index <=> root.embedding_run_mode_index;
+				embedding_acceleration_index <=> root.embedding_acceleration_index;
+				embedding_batch_size <=> root.embedding_batch_size;
+				app_busy: root.app_busy;
+				settings_card: root.settings_card;
+				rss_card: root.rss_card;
+				embedding_card: root.embedding_card;
+				save_changes => { root.request_save_changes(); }
+				check_updates => { root.request_check_updates(); }
+				open_update => { root.request_open_desktop_download(); }
+				open_release_notes => { root.request_open_desktop_release_notes(); }
+				rss_check_api => { root.request_rss_check_api(); }
+				rss_install_or_update => { root.request_rss_install_or_update(); }
+				rss_toggle_run => { root.request_rss_toggle_run(); }
+				rss_uninstall => { root.request_rss_uninstall(); }
+				embedding_check_api => { root.request_embedding_check_api(); }
+				embedding_install_or_update => { root.request_embedding_install_or_update(); }
+				embedding_toggle_run => { root.request_embedding_toggle_run(); }
+				embedding_uninstall => { root.request_embedding_uninstall(); }
+			}
+
+			if root.card-column-count == 2 : DashboardTwoColumns {
+				content_width: root.content-width;
+				card_gutter: root.card-gutter;
+				card_width: root.card-column-width;
+				api_url <=> root.api_url;
+				rss_api_key <=> root.rss_api_key;
+				rss_run_mode_index <=> root.rss_run_mode_index;
+				rss_max_requests <=> root.rss_max_requests;
+				embedding_api_key <=> root.embedding_api_key;
+				embedding_run_mode_index <=> root.embedding_run_mode_index;
+				embedding_acceleration_index <=> root.embedding_acceleration_index;
+				embedding_batch_size <=> root.embedding_batch_size;
+				app_busy: root.app_busy;
+				settings_card: root.settings_card;
+				rss_card: root.rss_card;
+				embedding_card: root.embedding_card;
+				save_changes => { root.request_save_changes(); }
+				check_updates => { root.request_check_updates(); }
+				open_update => { root.request_open_desktop_download(); }
+				open_release_notes => { root.request_open_desktop_release_notes(); }
+				rss_check_api => { root.request_rss_check_api(); }
+				rss_install_or_update => { root.request_rss_install_or_update(); }
+				rss_toggle_run => { root.request_rss_toggle_run(); }
+				rss_uninstall => { root.request_rss_uninstall(); }
+				embedding_check_api => { root.request_embedding_check_api(); }
+				embedding_install_or_update => { root.request_embedding_install_or_update(); }
+				embedding_toggle_run => { root.request_embedding_toggle_run(); }
+				embedding_uninstall => { root.request_embedding_uninstall(); }
+			}
+
+			if root.card-column-count == 3 : DashboardThreeColumns {
+				content_width: root.content-width;
+				card_gutter: root.card-gutter;
+				card_width: root.card-column-width;
+				api_url <=> root.api_url;
+				rss_api_key <=> root.rss_api_key;
+				rss_run_mode_index <=> root.rss_run_mode_index;
+				rss_max_requests <=> root.rss_max_requests;
+				embedding_api_key <=> root.embedding_api_key;
+				embedding_run_mode_index <=> root.embedding_run_mode_index;
+				embedding_acceleration_index <=> root.embedding_acceleration_index;
+				embedding_batch_size <=> root.embedding_batch_size;
+				app_busy: root.app_busy;
+				settings_card: root.settings_card;
+				rss_card: root.rss_card;
+				embedding_card: root.embedding_card;
+				save_changes => { root.request_save_changes(); }
+				check_updates => { root.request_check_updates(); }
+				open_update => { root.request_open_desktop_download(); }
+				open_release_notes => { root.request_open_desktop_release_notes(); }
+				rss_check_api => { root.request_rss_check_api(); }
+				rss_install_or_update => { root.request_rss_install_or_update(); }
+				rss_toggle_run => { root.request_rss_toggle_run(); }
+				rss_uninstall => { root.request_rss_uninstall(); }
+				embedding_check_api => { root.request_embedding_check_api(); }
+				embedding_install_or_update => { root.request_embedding_install_or_update(); }
+				embedding_toggle_run => { root.request_embedding_toggle_run(); }
+				embedding_uninstall => { root.request_embedding_uninstall(); }
+			}
+		}
+	}
+}

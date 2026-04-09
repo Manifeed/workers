@@ -101,7 +101,7 @@ where
             let mut batch_vectors = match self.embedder.embed(&chunk_inputs).await {
                 Ok(vectors) => vectors,
                 Err(error) => {
-                    let _ = self.status.mark_error(error.to_string());
+                    let _ = self.status.mark_error(error.user_facing_message());
                     self.gateway
                         .fail(
                             task.task_id,
@@ -123,7 +123,7 @@ where
                 task.sources.len(),
                 vectors.len()
             );
-            let _ = self.status.mark_error(message.clone());
+            let _ = self.status.mark_error("Embedding mismatch");
             self.gateway
                 .fail(
                     task.task_id,

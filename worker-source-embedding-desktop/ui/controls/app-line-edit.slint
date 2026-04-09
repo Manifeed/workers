@@ -1,0 +1,56 @@
+import { Theme } from "../theme.slint";
+import { ControlShell } from "control-shell.slint";
+
+export component AppLineEdit inherits ControlShell {
+	in property <string> placeholder-text;
+	in property <InputType> input-type: InputType.text;
+	in property <bool> read-only: false;
+	out property <bool> has-focus <=> input.has-focus;
+	in-out property <string> text <=> input.text;
+
+	callback accepted <=> input.accepted;
+	callback edited <=> input.edited;
+
+	focused: input.has-focus;
+	forward-focus: input;
+
+	HorizontalLayout {
+		padding-left: Theme.control-padding-x;
+		padding-right: Theme.control-padding-x;
+
+		Rectangle {
+			background: transparent;
+			clip: true;
+			horizontal-stretch: 1;
+
+			Text {
+				visible: input.text == "" && input.preedit-text == "";
+				width: parent.width;
+				height: parent.height;
+				text: root.placeholder-text;
+				color: Theme.control-placeholder;
+				font-family: Theme.font-ui;
+				font-size: Theme.fs-body;
+				font-weight: Theme.fw-semibold;
+				vertical-alignment: center;
+			}
+
+			input := TextInput {
+				width: parent.width;
+				height: parent.height;
+				enabled: root.enabled;
+				read-only: root.read-only;
+				input-type: root.input-type;
+				single-line: true;
+				color: Theme.control-text;
+				font-family: Theme.font-ui;
+				font-size: Theme.fs-body;
+				font-weight: Theme.fw-semibold;
+				vertical-alignment: center;
+				selection-background-color: Theme.accent;
+				selection-foreground-color: Theme.white;
+				accessible-role: none;
+			}
+		}
+	}
+}

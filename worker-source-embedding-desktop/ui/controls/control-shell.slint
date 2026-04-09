@@ -1,0 +1,13 @@
+import { Theme } from "../theme.slint";
+
+export component ControlShell inherits Rectangle {
+	in property <bool> enabled: true;
+	in property <bool> focused: false;
+
+	height: Theme.btn-height;
+	border-radius: Theme.rad-m;
+	border-width: focused ? 2px : 1px;
+	border-color: focused ? Theme.control-focus-border : Theme.control-border;
+	background: enabled ? Theme.control-bg : Theme.control-disabled-bg;
+	clip: true;
+}

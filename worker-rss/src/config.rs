@@ -4,15 +4,15 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use manifeed_worker_common::{
-    app_paths, load_workers_config, WorkerAuthConfig, WorkerError, WorkerType, DEFAULT_API_URL,
+    app_paths, load_workers_config, WorkerAuthConfig, WorkerError, WorkerType,
 };
 
 use crate::error::Result;
 
 const BUILTIN_RSS_POLL_SECONDS: u64 = 5;
 const BUILTIN_RSS_LEASE_SECONDS: u32 = 120;
-const BUILTIN_RSS_HOST_MAX_REQUESTS_PER_SECOND: u32 = 20;
-const BUILTIN_RSS_MAX_IN_FLIGHT_REQUESTS_PER_HOST: usize = 4;
+const BUILTIN_RSS_HOST_MAX_REQUESTS_PER_SECOND: u32 = 10;
+const BUILTIN_RSS_MAX_IN_FLIGHT_REQUESTS_PER_HOST: usize = 3;
 const BUILTIN_RSS_REQUEST_TIMEOUT_SECONDS: u64 = 10;
 const BUILTIN_RSS_FETCH_RETRY_COUNT: u32 = 1;
 
@@ -44,6 +44,9 @@ impl RssWorkerConfig {
         let app_dirs = app_paths()?;
         let worker_paths = app_dirs.worker_paths(WorkerType::RssScrapper);
         let (config_path, stored) = load_workers_config(overrides.config_path.as_deref())?;
+        let api_url = optional_env_string("MANIFEED_API_URL")
+            .or_else(|| optional_env_string("MANIFEED_WORKER_API_URL"))
+            .unwrap_or_else(|| stored.worker_api_url(WorkerType::RssScrapper).to_string());
 
         let api_key = overrides
             .api_key
@@ -54,13 +57,13 @@ impl RssWorkerConfig {
             })
             .ok_or_else(|| {
                 WorkerError::Config(
-                    "missing worker API key; run `worker-rss install --api-key ...` or set MANIFEED_WORKER_API_KEY"
+                    "missing worker API key; set it in the desktop app or with `worker-rss config set api-key ...`"
                         .to_string(),
                 )
             })?;
 
         Ok(Self {
-            api_url: DEFAULT_API_URL.to_string(),
+            api_url,
             session_ttl_seconds: env_or_value("MANIFEED_RSS_SESSION_TTL_SECONDS", 3600u32)?,
             poll_seconds: BUILTIN_RSS_POLL_SECONDS,
             lease_seconds: BUILTIN_RSS_LEASE_SECONDS,

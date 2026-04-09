@@ -1,0 +1,110 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { ComboOptionRow } from "combo-option-row.slint";
+import { ControlShell } from "control-shell.slint";
+
+export component AppComboBox inherits ControlShell {
+	in property <[string]> model;
+	in property <int> visible-items: 6;
+	in-out property <int> current-index: 0;
+	out property <string> current-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+
+	callback selected(current-value: string);
+
+	private property <bool> popup-open: false;
+
+	focused: root.popup-open;
+
+	function toggle-popup() {
+		if !root.enabled || root.model.length == 0 {
+			return;
+		}
+
+		if root.popup-open {
+			root.popup-open = false;
+			popup.close();
+		} else {
+			root.popup-open = true;
+			popup.show();
+		}
+	}
+
+	function choose(index: int) {
+		root.current-index = index;
+		root.selected(root.current-value);
+		root.popup-open = false;
+		popup.close();
+	}
+
+	HorizontalLayout {
+		padding-left: Theme.control-padding-x;
+		padding-right: Theme.control-padding-x;
+		spacing: Theme.sp-md;
+
+		Text {
+			horizontal-stretch: 1;
+			text: root.current-value == "" ? "Select" : root.current-value;
+			color: root.current-value == "" ? Theme.control-placeholder : Theme.control-text;
+			font-family: Theme.font-ui;
+			font-size: Theme.fs-body;
+			font-weight: Theme.fw-semibold;
+			vertical-alignment: center;
+			wrap: word-wrap;
+		}
+
+		Text {
+			text: root.popup-open ? "^" : "v";
+			color: Theme.control-text;
+			font-family: Theme.font-ui;
+			font-size: Theme.fs-small;
+			font-weight: Theme.fw-bold;
+			vertical-alignment: center;
+		}
+	}
+
+	touch := TouchArea {
+		enabled: root.enabled;
+		clicked => {
+			root.toggle-popup();
+		}
+	}
+
+	popup := PopupWindow {
+		x: 0;
+		y: root.height + Theme.control-popup-offset;
+		width: root.width;
+		height: min(root.visible-items, root.model.length) * Theme.btn-height + Theme.sp-sm * 2;
+		forward-focus: popup-focus;
+
+		Rectangle {
+			border-radius: Theme.rad-m;
+			border-width: 1px;
+			border-color: Theme.control-border;
+			background: Theme.surface-bg;
+			clip: true;
+
+			ScrollView {
+				VerticalLayout {
+					alignment: start;
+					padding: Theme.sp-sm;
+					spacing: Theme.sp-xs;
+
+					for value[index] in root.model: ComboOptionRow {
+						text: value;
+						selected: index == root.current-index;
+						activate => { root.choose(index); }
+					}
+				}
+			}
+		}
+
+		popup-focus := FocusScope {
+			focus-changed-event => {
+				root.popup-open = self.has-focus;
+				if !self.has-focus {
+					popup.close();
+				}
+			}
+		}
+	}
+}

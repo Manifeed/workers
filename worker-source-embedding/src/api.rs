@@ -139,7 +139,9 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             match self.claim_once().await {
                 Ok(task) => return Ok(task),
                 Err(error) if error.is_network_error() => {
-                    let _ = self.status.mark_server_disconnected(error.to_string());
+                    let _ = self
+                        .status
+                        .mark_server_disconnected(error.user_facing_message());
                     warn!(
                         retry_delay_seconds = NETWORK_RETRY_DELAY_SECONDS,
                         "network error while claiming embedding task, retrying: {error}"
@@ -211,7 +213,9 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
                     return Ok(());
                 }
                 Err(error) if error.is_network_error() => {
-                    let _ = self.status.mark_server_disconnected(error.to_string());
+                    let _ = self
+                        .status
+                        .mark_server_disconnected(error.user_facing_message());
                     warn!(
                         task_id,
                         execution_id,
@@ -284,7 +288,9 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
                     return Ok(());
                 }
                 Err(error) if error.is_network_error() => {
-                    let _ = self.status.mark_server_disconnected(error.to_string());
+                    let _ = self
+                        .status
+                        .mark_server_disconnected(error.user_facing_message());
                     warn!(
                         task_id,
                         execution_id,

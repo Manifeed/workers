@@ -1,0 +1,8 @@
+import { SettingsCard } from "../cards/settings-card.slint";
+
+export component SettingsPanel inherits SettingsCard {
+	in property <length> card_width: 0px;
+
+	min-width: root.card_width;
+	max-width: root.card_width;
+}

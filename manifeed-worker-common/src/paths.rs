@@ -105,7 +105,10 @@ impl AppPaths {
     }
 
     pub fn worker_paths(&self, worker_type: WorkerType) -> WorkerRuntimePaths {
-        let install_dir = self.data_dir.join(worker_type.section_name());
+        let install_dir = self
+            .data_dir
+            .join(worker_type.section_name())
+            .join("current");
         let log_dir = self.cache_dir.join(worker_type.section_name());
         let state_dir = self.state_dir.join(worker_type.section_name());
         let cache_dir = match worker_type {
@@ -120,4 +123,33 @@ impl AppPaths {
             cache_dir,
         }
     }
+}
+
+pub fn installed_worker_binary_path(worker_type: WorkerType) -> Result<PathBuf> {
+    Ok(app_paths()?
+        .worker_paths(worker_type)
+        .install_dir
+        .join("bin")
+        .join(worker_type.binary_name()))
+}
+
+pub fn installed_embedding_runtime_dir() -> Result<PathBuf> {
+    Ok(app_paths()?
+        .worker_paths(WorkerType::SourceEmbedding)
+        .install_dir
+        .join("runtime"))
+}
+
+pub fn installed_embedding_runtime_library_path() -> Result<PathBuf> {
+    Ok(installed_embedding_runtime_dir()?
+        .join("lib")
+        .join(if env::consts::OS == "macos" {
+            "libonnxruntime.dylib"
+        } else {
+            "libonnxruntime.so"
+        }))
+}
+
+pub fn installed_embedding_runtime_bundle_marker_path() -> Result<PathBuf> {
+    Ok(installed_embedding_runtime_dir()?.join("bundle.txt"))
 }

@@ -195,7 +195,7 @@ impl HttpRssGateway {
             .await?;
         self.remove_lease_metadata(task_id, execution_id)?;
         let _ = self.status.mark_server_connected();
-        let _ = self.status.mark_completed_task();
+        let _ = self.status.record_completed_task();
         Ok(())
     }
 
@@ -371,7 +371,9 @@ impl RssGateway for HttpRssGateway {
             match self.claim_once(count).await {
                 Ok(tasks) => return Ok(tasks),
                 Err(error) if Self::should_retry(&error) => {
-                    let _ = self.status.mark_server_disconnected(error.to_string());
+                    let _ = self
+                        .status
+                        .mark_server_disconnected(error.user_facing_message());
                     warn!(
                         retry_delay_seconds = NETWORK_RETRY_DELAY_SECONDS,
                         "network error while claiming rss tasks, retrying: {error}"
@@ -393,7 +395,9 @@ impl RssGateway for HttpRssGateway {
             match self.complete_once(task_id, execution_id, &results).await {
                 Ok(()) => return Ok(()),
                 Err(error) if Self::should_retry(&error) => {
-                    let _ = self.status.mark_server_disconnected(error.to_string());
+                    let _ = self
+                        .status
+                        .mark_server_disconnected(error.user_facing_message());
                     warn!(
                         task_id,
                         execution_id,
@@ -412,7 +416,9 @@ impl RssGateway for HttpRssGateway {
             match self.fail_once(task_id, execution_id, &error_message).await {
                 Ok(()) => return Ok(()),
                 Err(error) if Self::should_retry(&error) => {
-                    let _ = self.status.mark_server_disconnected(error.to_string());
+                    let _ = self
+                        .status
+                        .mark_server_disconnected(error.user_facing_message());
                     warn!(
                         task_id,
                         execution_id,

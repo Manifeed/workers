@@ -1,0 +1,72 @@
+import { EmbeddingWorkerPanel } from "../panels/embedding-worker-panel.slint";
+import { RssWorkerPanel } from "../panels/rss-worker-panel.slint";
+import { SettingsPanel } from "../panels/settings-panel.slint";
+import { DashboardLayoutBase } from "dashboard-layout-base.slint";
+
+export component DashboardTwoColumns inherits DashboardLayoutBase {
+	height: content.preferred-height;
+
+	content := HorizontalLayout {
+		width: root.content_width;
+		spacing: root.card_gutter;
+
+		Rectangle {
+			background: transparent;
+			min-width: root.card_width;
+			max-width: root.card_width;
+
+			VerticalLayout {
+				alignment: start;
+				spacing: root.card_gutter;
+
+				SettingsPanel {
+					card_width: root.card_width;
+					api_url <=> root.api_url;
+					app_busy: root.app_busy;
+					card: root.settings_card;
+					save_changes => { root.save_changes(); }
+					check_updates => { root.check_updates(); }
+					open_update => { root.open_update(); }
+					open_release_notes => { root.open_release_notes(); }
+				}
+
+				EmbeddingWorkerPanel {
+					card_width: root.card_width;
+					card: root.embedding_card;
+					api_key <=> root.embedding_api_key;
+					run_mode_index <=> root.embedding_run_mode_index;
+					acceleration_index <=> root.embedding_acceleration_index;
+					batch_size <=> root.embedding_batch_size;
+					app_busy: root.app_busy;
+					check_api => { root.embedding_check_api(); }
+					install_or_update => { root.embedding_install_or_update(); }
+					toggle_run => { root.embedding_toggle_run(); }
+					uninstall => { root.embedding_uninstall(); }
+				}
+			}
+		}
+
+		Rectangle {
+			background: transparent;
+			min-width: root.card_width;
+			max-width: root.card_width;
+
+			VerticalLayout {
+				alignment: start;
+
+				RssWorkerPanel {
+					card_width: root.card_width;
+					card: root.rss_card;
+					api_key <=> root.rss_api_key;
+					run_mode_index <=> root.rss_run_mode_index;
+					max_requests <=> root.rss_max_requests;
+					app_busy: root.app_busy;
+					check_api => { root.rss_check_api(); }
+					install_or_update => { root.rss_install_or_update(); }
+					toggle_run => { root.rss_toggle_run(); }
+					uninstall => { root.rss_uninstall(); }
+				}
+			}
+		}
+	}
+}

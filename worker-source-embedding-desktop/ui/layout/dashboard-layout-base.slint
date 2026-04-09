@@ -1,0 +1,37 @@
+import { SettingsCardView, WorkerCardView } from "../view-types.slint";
+
+export component DashboardLayoutBase inherits Rectangle {
+	in property <length> content_width: 0px;
+	in property <length> card_gutter: 0px;
+	in property <length> card_width: 0px;
+
+	in-out property <string> api_url;
+	in-out property <string> rss_api_key;
+	in-out property <int> rss_run_mode_index: 0;
+	in-out property <int> rss_max_requests: 5;
+	in-out property <string> embedding_api_key;
+	in-out property <int> embedding_run_mode_index: 0;
+	in-out property <int> embedding_acceleration_index: 0;
+	in-out property <int> embedding_batch_size: 1;
+
+	in property <bool> app_busy: false;
+	in property <SettingsCardView> settings_card;
+	in property <WorkerCardView> rss_card;
+	in property <WorkerCardView> embedding_card;
+
+	callback save_changes;
+	callback check_updates;
+	callback open_update;
+	callback open_release_notes;
+	callback rss_check_api;
+	callback rss_install_or_update;
+	callback rss_toggle_run;
+	callback rss_uninstall;
+	callback embedding_check_api;
+	callback embedding_install_or_update;
+	callback embedding_toggle_run;
+	callback embedding_uninstall;
+
+	width: root.content_width;
+	background: transparent;
+}

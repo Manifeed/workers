@@ -82,15 +82,13 @@ fn install_linux_user_service(
     let service_dir = PathBuf::from(home).join(".config/systemd/user");
     fs::create_dir_all(&service_dir)?;
     let service_path = service_dir.join(format!("{}.service", worker_type.service_name()));
-    fs::write(
-        &service_path,
-        format!(
-            "[Unit]\nDescription=Manifeed {}\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart={} run --config {}\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n",
-            worker_type.display_name(),
-            shell_escape(binary_path),
-            shell_escape(config_path),
-        ),
-    )?;
+    let service_body = format!(
+        "[Unit]\nDescription=Manifeed {}\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart={} run --config {}\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n",
+        worker_type.display_name(),
+        shell_escape(binary_path),
+        shell_escape(config_path),
+    );
+    fs::write(&service_path, service_body)?;
     run_command(Command::new("systemctl").args(["--user", "daemon-reload"]))?;
     run_command(Command::new("systemctl").args([
         "--user",

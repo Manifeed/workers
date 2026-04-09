@@ -1,0 +1,109 @@
+import { Theme } from "../theme.slint";
+import { WorkerCardView } from "../view-types.slint";
+import { CardShell } from "../components/card-shell.slint";
+import { EditorialButton } from "../components/editorial-button.slint";
+import { NoticeBanner } from "../components/notice-banner.slint";
+import { StatusIndicator } from "../components/status-indicator.slint";
+
+export component WorkerCardFrame inherits CardShell {
+	in property <string> title;
+	in property <WorkerCardView> card;
+	in property <bool> app_busy;
+	callback check_api;
+	callback install_or_update;
+	callback toggle_run;
+	callback uninstall;
+
+	shell_content_height: content.preferred-height;
+
+	content := VerticalLayout {
+		alignment: start;
+		padding: Theme.sp-2xl;
+		spacing: Theme.sp-xl;
+
+		VerticalLayout {
+			spacing: Theme.sp-xs;
+
+			HorizontalLayout {
+				spacing: Theme.sp-md;
+
+				Text {
+					text: root.title;
+					color: Theme.text-primary;
+					font-family: Theme.font-heading;
+					font-size: Theme.fs-card-title;
+					font-weight: Theme.fw-bold;
+				}
+
+				StatusIndicator {
+					label: root.card.status_label;
+					tone: root.card.status_tone;
+				}
+
+				Rectangle {
+					horizontal-stretch: 1;
+					background: transparent;
+				}
+
+				Text {
+					visible: root.card.busy;
+					text: "Working";
+					color: Theme.busy-text;
+					font-family: Theme.font-body;
+					font-size: Theme.fs-label;
+					font-weight: Theme.fw-semibold;
+				}
+			}
+
+			Text {
+				text: root.card.version_line;
+				color: Theme.text-muted;
+				font-family: Theme.font-body;
+				font-size: Theme.fs-label;
+				wrap: word-wrap;
+			}
+		}
+
+		VerticalLayout {
+			spacing: Theme.sp-md;
+
+			EditorialButton {
+				primary: true;
+				text: root.card.run_label;
+				enabled: !root.app_busy && root.card.can_toggle_run;
+				pressed => { root.toggle_run(); }
+			}
+
+			HorizontalLayout {
+				spacing: Theme.sp-md;
+
+				EditorialButton {
+					text: "Check API";
+					enabled: !root.app_busy;
+					pressed => { root.check_api(); }
+				}
+
+				if root.card.show_install_action : EditorialButton {
+					text: root.card.install_label;
+					enabled: !root.app_busy;
+					pressed => { root.install_or_update(); }
+				}
+
+				EditorialButton {
+					text: "Uninstall";
+					enabled: !root.app_busy && root.card.can_uninstall;
+					pressed => { root.uninstall(); }
+				}
+			}
+		}
+
+		if root.card.notice.visible : NoticeBanner {
+			notice: root.card.notice;
+		}
+
+		VerticalLayout {
+			spacing: Theme.sp-base;
+			@children
+		}
+	}
+}

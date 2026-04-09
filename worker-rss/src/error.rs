@@ -1,4 +1,6 @@
-use manifeed_worker_common::WorkerError;
+use manifeed_worker_common::{
+    is_auth_error, user_facing_error_message, user_facing_reqwest_error_message, WorkerError,
+};
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, RssWorkerError>;
@@ -24,6 +26,20 @@ impl RssWorkerError {
                 error.is_timeout() || error.is_connect() || error.is_body() || error.is_request()
             }
             _ => false,
+        }
+    }
+
+    pub fn is_auth_error(&self) -> bool {
+        matches!(self, Self::Common(error) if is_auth_error(error))
+    }
+
+    pub fn user_facing_message(&self) -> String {
+        match self {
+            Self::Common(error) => user_facing_error_message(error),
+            Self::Http(error) => user_facing_reqwest_error_message(error),
+            Self::InvalidPayload(_) => "Invalid task data".to_string(),
+            Self::InvalidHeader(_) => "Invalid API request".to_string(),
+            Self::Runtime(_) => "Worker runtime error".to_string(),
         }
     }
 }

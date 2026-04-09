@@ -29,7 +29,7 @@ impl GpuSupport {
     pub fn is_supported(&self) -> bool {
         matches!(
             self.recommended_backend.as_deref(),
-            Some("cuda") | Some("webgpu")
+            Some("cuda") | Some("webgpu") | Some("coreml")
         ) && self
             .recommended_backend
             .as_ref()
@@ -46,31 +46,37 @@ impl GpuSupport {
             return error.clone();
         }
         if self.is_supported() {
-            let backend = self.recommended_backend.as_deref().unwrap_or("gpu");
+            let backend = self
+                .recommended_backend
+                .as_deref()
+                .unwrap_or("acceleration");
             let bundle = self.recommended_runtime_bundle.as_deref().unwrap_or("auto");
-            return format!("GPU disponible via {backend} ({bundle})");
+            return format!("Acceleration available via {backend} ({bundle})");
         }
         if let Some(runtime_load_error) = &self.runtime_load_error {
-            return format!("runtime ONNX indisponible: {runtime_load_error}");
+            return format!("ONNX runtime unavailable: {runtime_load_error}");
         }
         if matches!(
             self.recommended_backend.as_deref(),
-            Some("cuda") | Some("webgpu")
+            Some("cuda") | Some("webgpu") | Some("coreml")
         ) {
-            let backend = self.recommended_backend.as_deref().unwrap_or("gpu");
+            let backend = self
+                .recommended_backend
+                .as_deref()
+                .unwrap_or("acceleration");
             let providers = if self.available_execution_providers.is_empty() {
-                "aucun provider".to_string()
+                "no provider".to_string()
             } else {
                 self.available_execution_providers.join(", ")
             };
             return format!(
-				"GPU detectee, mais le runtime ONNX installe n'active pas {backend} (providers: {providers})"
-			);
+                "Acceleration was detected, but the installed ONNX runtime does not enable {backend} (providers: {providers})"
+            );
         }
         self.notes
             .first()
             .cloned()
-            .unwrap_or_else(|| "aucun backend GPU detecte".to_string())
+            .unwrap_or_else(|| "no acceleration backend was detected".to_string())
     }
 
     pub fn probe(binary: &Path, config: &Path) -> Self {
@@ -94,7 +100,7 @@ impl GpuSupport {
                         error: None,
                     },
                     Err(e) => Self {
-                        error: Some(format!("probe GPU invalide: {e}")),
+                        error: Some(format!("Invalid acceleration probe output: {e}")),
                         ..Self::default()
                     },
                 }
@@ -103,7 +109,7 @@ impl GpuSupport {
                 let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
                 Self {
                     error: Some(if stderr.is_empty() {
-                        format!("probe GPU en echec ({})", out.status)
+                        format!("Acceleration probe failed ({})", out.status)
                     } else {
                         stderr
                     }),
@@ -111,7 +117,7 @@ impl GpuSupport {
                 }
             }
             Err(e) => Self {
-                error: Some(format!("impossible d'executer le probe GPU: {e}")),
+                error: Some(format!("Could not execute the acceleration probe: {e}")),
                 ..Self::default()
             },
         }
@@ -131,7 +137,7 @@ mod tests {
         };
 
         assert!(!support.is_supported());
-        assert!(support.summary().contains("n'active pas cuda"));
+        assert!(support.summary().contains("does not enable cuda"));
     }
 
     #[test]
@@ -144,6 +150,25 @@ mod tests {
         };
 
         assert!(support.is_supported());
-        assert_eq!(support.summary(), "GPU disponible via cuda (cuda12)");
+        assert_eq!(
+            support.summary(),
+            "Acceleration available via cuda (cuda12)"
+        );
+    }
+
+    #[test]
+    fn coreml_support_is_available_when_runtime_matches() {
+        let support = GpuSupport {
+            recommended_backend: Some("coreml".to_string()),
+            recommended_runtime_bundle: Some("coreml".to_string()),
+            available_execution_providers: vec!["coreml".to_string(), "cpu".to_string()],
+            ..GpuSupport::default()
+        };
+
+        assert!(support.is_supported());
+        assert_eq!(
+            support.summary(),
+            "Acceleration available via coreml (coreml)"
+        );
     }
 }

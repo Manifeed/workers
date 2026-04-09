@@ -1,0 +1,31 @@
+Source: manifeed-workers
+Section: utils
+Priority: optional
+Maintainer: Manifeed Maintainers <maintainers@manifeed.local>
+Build-Depends:
+ debhelper-compat (= 13),
+ cargo,
+ rustc,
+ pkg-config,
+ curl,
+ ca-certificates,
+ libasound2-dev,
+ libfontconfig1-dev,
+ libfreetype6-dev,
+ libgl1-mesa-dev,
+ libudev-dev,
+ libwayland-dev,
+ libx11-dev,
+ libxcb1-dev,
+ libxkbcommon-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://manifeed.local
+
+Package: manifeed-workers-desktop
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Shared desktop app for configuring Manifeed workers
+ Installs only the Linux desktop application. RSS and Embedding workers are
+ downloaded, installed, updated and removed directly from the desktop app in
+ the user's home directory.

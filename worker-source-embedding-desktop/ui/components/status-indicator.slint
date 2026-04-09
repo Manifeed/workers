@@ -1,0 +1,23 @@
+import { Theme } from "../theme.slint";
+
+export component StatusIndicator inherits HorizontalLayout {
+	in property <string> label;
+	in property <int> tone;
+
+	spacing: Theme.sp-sm;
+
+	Rectangle {
+		width: 10px;
+		height: 10px;
+		border-radius: 5px;
+		background: Theme.worker-status-color(root.tone);
+	}
+
+	Text {
+		text: root.label;
+		color: Theme.worker-status-text(root.tone);
+		font-family: Theme.font-ui;
+		font-size: Theme.fs-label;
+		font-weight: Theme.fw-semibold;
+	}
+}

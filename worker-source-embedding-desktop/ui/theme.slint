@@ -1,0 +1,108 @@
+import "fonts/SpaceGrotesk-VariableFont_wght.ttf";
+import "fonts/LiberationSerif-Bold.ttf";
+
+export global Theme {
+	// ── Colors ──
+	in property <color> primary:			#003FE0;
+	in property <color> secondary:			#DF7700;
+	in property <color> white:				#F9F8F6;
+	in property <color> dark-gray:			#141824;
+	in property <color> light-gray:			#E1DFDB;
+	in property <color> very-light-gray:	#EFEEEC;
+	in property <color> success:			#3F6247;
+	in property <color> warning:			#7D5A22;
+	in property <color> danger:				#7F3B33;
+	in property <color> muted:				#5C5550;
+
+	// -- Page --
+	out property <color> page-bg:		   very-light-gray;
+
+	// -- Surface / Cards --
+	out property <color> surface-bg:		white;
+	out property <color> surface-border:	light-gray;
+
+	// -- Text --
+	out property <color> text-primary:		dark-gray;
+	out property <color> text-heading:		dark-gray;
+	out property <color> text-secondary:	dark-gray;
+	out property <color> text-body:			dark-gray;
+	out property <color> text-muted:		secondary;
+
+	// -- Buttons --
+	out property <color> accent:			secondary;
+	out property <color> btn-bg:			very-light-gray;
+	out property <color> btn-border:		light-gray;
+	out property <color> btn-disabled:		white;
+	out property <color> btn-text:			dark-gray;
+	out property <color> busy-text:			warning;
+	out property <color> control-bg:		white;
+	out property <color> control-border:	light-gray;
+	out property <color> control-disabled-bg: very-light-gray;
+	out property <color> control-text:		dark-gray;
+	out property <color> control-placeholder: muted;
+	out property <color> control-focus-border: secondary;
+	out property <color> control-hover-bg:	#f3eee7;
+	out property <color> control-selected-bg: #ebe5dc;
+
+	// -- Fonts --
+	out property <string> font-heading:	"Liberation Serif";
+	out property <string> font-body:	"Space Grotesk";
+	out property <string> font-ui:		"Space Grotesk";
+
+	// -- Font sizes --
+	out property <length> fs-title:			40px;
+	out property <length> fs-card-title:	28px;
+	out property <length> fs-section-title:	28px;
+	out property <length> fs-body:			15px;
+	out property <length> fs-small:			12px;
+	out property <length> fs-label:			15px;
+
+	// -- Font weights --
+	out property <int> fw-bold:		700;
+	out property <int> fw-semibold:	600;
+
+	// -- Spacing --
+	out property <length> sp-xs:	6px;
+	out property <length> sp-sm:	8px;
+	out property <length> sp-md:	12px;
+	out property <length> sp-base:	14px;
+	out property <length> sp-lg:	16px;
+	out property <length> sp-xl:	18px;
+	out property <length> sp-2xl:	22px;
+
+	// -- Radii --
+	out property <length> rad-s:	5px;
+	out property <length> rad-m:	10px;
+	out property <length> rad-l:	24px;
+	out property <length> rad-xl:	28px;
+
+	//--Component heights--
+	out property <length> btn-height:	40px;
+	out property <length> control-padding-x: 14px;
+	out property <length> control-popup-offset: 6px;
+	out property <length> control-step-width: 28px;
+	out property <length> control-step-height: 28px;
+
+	// -- Breakpoints --
+	out property <length> bp-grid-2:	820px;
+	out property <length> bp-grid-3:	1180px;
+
+	// -- Tone resolvers (0 = neutral, 1 = success, 2 = warning, 3 = danger) --
+	public pure function banner-bg(tone: int) -> color {
+		return tone == 1 ? #f3f7f1 : tone == 2 ? #f8f3eb : tone == 3 ? #f8f0ee : #f6f1ea;
+	}
+	public pure function banner-border(tone: int) -> color {
+		return tone == 1 ? #b8cab8 : tone == 2 ? #d8c39e : tone == 3 ? #d9b5b0 : #d8cdbf;
+	}
+	public pure function banner-text(tone: int) -> color {
+		return tone == 1 ? #36563e : tone == 2 ? #70521f : tone == 3 ? #6b312a : #544d48;
+	}
+
+	// -- Worker status resolvers (0 = inactive, 1 = active, 2 = processing, 3 = error) --
+	public pure function worker-status-color(tone: int) -> color {
+		return tone == 1 ? primary : tone == 2 ? secondary : tone == 3 ? #B13A2F : muted;
+	}
+	public pure function worker-status-text(tone: int) -> color {
+		return tone == 1 ? primary : tone == 2 ? secondary : tone == 3 ? #8C3028 : muted;
+	}
+}

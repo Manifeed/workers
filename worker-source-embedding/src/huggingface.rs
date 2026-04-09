@@ -109,7 +109,10 @@ pub struct HuggingFaceOnnxModelManager {
 impl HuggingFaceOnnxModelManager {
     pub fn new(config: &EmbeddingWorkerConfig, status: WorkerStatusHandle) -> Result<Self> {
         let client = Client::builder()
-            .user_agent("manifeed-worker-source-embedding/0.1.0")
+            .user_agent(format!(
+                "manifeed-worker-source-embedding/{}",
+                env!("CARGO_PKG_VERSION")
+            ))
             .build()
             .map_err(|error| EmbeddingWorkerError::Runtime(error.to_string()))?;
         Ok(Self {

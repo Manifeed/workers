@@ -1,0 +1,32 @@
+import { Theme } from "../theme.slint";
+
+export component StepButton inherits Rectangle {
+	in property <string> label;
+	in property <bool> enabled: true;
+	callback pressed;
+
+	width: Theme.btn-height - Theme.sp-sm * 2;
+	height: Theme.btn-height - Theme.sp-sm * 2;
+	border-radius: Theme.rad-s;
+	border-width: 1px;
+	border-color: Theme.control-border;
+	background: !root.enabled ? Theme.control-disabled-bg : touch.pressed ? Theme.control-hover-bg : Theme.btn-bg;
+	clip: true;
+
+	Text {
+		text: root.label;
+		color: root.enabled ? Theme.control-text : Theme.text-muted;
+		font-family: Theme.font-ui;
+		font-size: Theme.fs-body;
+		font-weight: Theme.fw-bold;
+		horizontal-alignment: center;
+		vertical-alignment: center;
+	}
+
+	touch := TouchArea {
+		enabled: root.enabled;
+		clicked => {
+			root.pressed();
+		}
+	}
+}

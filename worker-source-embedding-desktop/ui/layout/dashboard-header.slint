@@ -1,0 +1,29 @@
+import { Theme } from "../theme.slint";
+
+export component DashboardHeader inherits Rectangle {
+	height: content.preferred-height;
+	border-width: 1px;
+	border-radius: Theme.rad-l;
+	border-color: Theme.surface-border;
+	background: Theme.surface-bg;
+
+	touch := TouchArea {
+		clicked => {
+			TextInputInterface.text-input-focused = false;
+		}
+	}
+
+	content := VerticalLayout {
+		alignment: start;
+		padding: Theme.sp-2xl;
+		spacing: Theme.sp-sm;
+
+		Text {
+			text: "MANIFEED Workers";
+			color: Theme.text-heading;
+			font-family: Theme.font-heading;
+			font-size: Theme.fs-title;
+			font-weight: Theme.fw-bold;
+		}
+	}
+}

@@ -1,0 +1,8 @@
+import { EmbeddingWorkerCard } from "../cards/embedding-worker-card.slint";
+
+export component EmbeddingWorkerPanel inherits EmbeddingWorkerCard {
+	in property <length> card_width: 0px;
+
+	min-width: root.card_width;
+	max-width: root.card_width;
+}

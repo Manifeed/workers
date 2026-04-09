@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Manifeed Workers
+Comment=Control and configure Manifeed RSS and embedding workers
+Exec=/usr/bin/manifeed-workers
+Icon=manifeed-workers
+Terminal=false
+Categories=Utility;Network;
+StartupNotify=true

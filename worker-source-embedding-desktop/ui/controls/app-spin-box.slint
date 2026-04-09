@@ -1,0 +1,123 @@
+import { Theme } from "../theme.slint";
+import { ControlShell } from "control-shell.slint";
+import { StepButton } from "step-button.slint";
+
+export component AppSpinBox inherits ControlShell {
+	in property <int> minimum: 0;
+	in property <int> maximum: 100;
+	in property <int> step-size: 1;
+	in property <bool> read-only: false;
+	out property <bool> has-focus <=> input.has-focus;
+	in-out property <int> value: minimum;
+
+	callback edited(value: int);
+
+	focused: input.has-focus;
+
+	function sync-text() {
+		input.text = root.value;
+	}
+
+	function dismiss-input-focus() {
+		button-focus.focus();
+	}
+
+	function apply-value(next: int) {
+		let clamped = next < root.minimum ? root.minimum : next > root.maximum ? root.maximum : next;
+		root.value = clamped;
+		root.edited(root.value);
+		root.sync-text();
+	}
+
+	function increment() {
+		if root.enabled && !root.read-only {
+			root.apply-value(root.value + root.step-size);
+		}
+	}
+
+	function decrement() {
+		if root.enabled && !root.read-only {
+			root.apply-value(root.value - root.step-size);
+		}
+	}
+
+	changed value => {
+		root.sync-text();
+	}
+
+	HorizontalLayout {
+		padding-left: Theme.control-padding-x;
+		padding-right: Theme.sp-sm;
+		spacing: Theme.sp-sm;
+
+		Rectangle {
+			background: transparent;
+			clip: true;
+			horizontal-stretch: 1;
+
+			input := TextInput {
+				width: parent.width;
+				height: parent.height;
+				text: root.value;
+				enabled: root.enabled;
+				read-only: root.read-only;
+				single-line: true;
+				color: Theme.control-text;
+				font-family: Theme.font-ui;
+				font-size: Theme.fs-body;
+				font-weight: Theme.fw-semibold;
+				vertical-alignment: center;
+				selection-background-color: Theme.accent;
+				selection-foreground-color: Theme.white;
+				accessible-role: none;
+
+				accepted => {
+					if !self.text.is-float() {
+						root.sync-text();
+					}
+				}
+
+				edited => {
+					if self.text.is-float() {
+						root.apply-value(self.text.to-float());
+					} else if self.text != "" {
+						root.sync-text();
+					}
+				}
+			}
+		}
+
+		HorizontalLayout {
+			spacing: Theme.sp-sm;
+			padding-top: Theme.sp-sm;
+			padding-bottom: Theme.sp-sm;
+
+			StepButton {
+				label: "-";
+				enabled: root.enabled && !root.read-only && root.value > root.minimum;
+				pressed => {
+					root.dismiss-input-focus();
+					root.decrement();
+				}
+			}
+
+			StepButton {
+				label: "+";
+				enabled: root.enabled && !root.read-only && root.value < root.maximum;
+				pressed => {
+					root.dismiss-input-focus();
+					root.increment();
+				}
+			}
+		}
+	}
+
+	button-focus := FocusScope {
+		x: -1px;
+		y: -1px;
+		width: 1px;
+		height: 1px;
+		focus-on-click: false;
+		focus-on-tab-navigation: false;
+	}
+}

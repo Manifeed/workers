@@ -154,6 +154,13 @@ impl WorkerStatusHandle {
         })
     }
 
+    pub fn record_completed_task(&self) -> Result<()> {
+        self.update(|snapshot| {
+            snapshot.completed_task_count = snapshot.completed_task_count.saturating_add(1);
+            snapshot.last_error = None;
+        })
+    }
+
     pub fn mark_server_connected(&self) -> Result<()> {
         self.update(|snapshot| {
             snapshot.server_connection = ServerConnectionState::Connected;
@@ -251,4 +258,55 @@ fn persist_snapshot(path: &Path, snapshot: &WorkerStatusSnapshot) -> Result<()> 
         ))
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use chrono::Utc;
+
+    use super::{CurrentTaskSnapshot, WorkerPhase, WorkerStatusHandle, WorkerStatusInit};
+    use crate::types::WorkerType;
+
+    #[test]
+    fn record_completed_task_preserves_current_phase() {
+        let path = std::env::temp_dir().join(format!(
+            "manifeed-worker-status-test-{}.json",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let handle = WorkerStatusHandle::new(
+            &path,
+            WorkerStatusInit {
+                worker_type: WorkerType::RssScrapper,
+                app_version: "0.1.0".to_string(),
+                acceleration_mode: None,
+                execution_backend: None,
+            },
+        )
+        .unwrap();
+
+        handle
+            .mark_processing(CurrentTaskSnapshot {
+                task_id: 1,
+                execution_id: 2,
+                job_id: Some("job-1".to_string()),
+                label: Some("job".to_string()),
+                worker_version: None,
+                item_count: Some(1),
+                started_at: Utc::now(),
+            })
+            .unwrap();
+        handle.record_completed_task().unwrap();
+
+        let snapshot = handle.snapshot().unwrap();
+        assert!(matches!(snapshot.phase, WorkerPhase::Processing));
+        assert_eq!(snapshot.completed_task_count, 1);
+
+        let _ = fs::remove_file(path);
+    }
 }

@@ -3,6 +3,12 @@ name = "worker-rss"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.manifeed.release]
+family = "rss"
+worker_version = "0.1.0"
+artifact_version_linux_x86_64 = "0.1.0"
+artifact_version_linux_aarch64 = "0.1.0"
+
 [dependencies]
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }

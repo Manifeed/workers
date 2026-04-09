@@ -47,15 +47,12 @@ where
         let mut claimed_feeds = ClaimedFeedQueue::new(self.max_in_flight_requests_per_host);
         let mut fetch_join_set = JoinSet::<CompletedFeed>::new();
         let mut completion_join_set = JoinSet::<Result<CompletedTaskAck>>::new();
-        let mut state_join_set = JoinSet::<(super::RssGatewayState, Result<()>)>::new();
-        let mut pending_state = None::<super::RssGatewayState>;
         let mut last_requested_state = self.last_requested_state.clone();
         let mut pending_completion_count = 0usize;
         let mut should_claim = true;
         let mut claimed_any_tasks = false;
 
         loop {
-            reconcile_state_updates(&mut state_join_set, &mut pending_state, &self.gateway);
             drain_completion_acks(
                 &mut completion_join_set,
                 &mut pending_completion_count,
@@ -75,12 +72,11 @@ where
                             claimed_feeds.enqueue_task(task);
                         }
                         request_state(
-                            &mut state_join_set,
-                            &mut pending_state,
                             &mut last_requested_state,
                             &self.gateway,
                             claimed_feeds.processing_state(pending_completion_count),
-                        );
+                        )
+                        .await;
                     }
                 }
                 should_claim = false;
@@ -101,28 +97,21 @@ where
                 || pending_completion_count > 0
             {
                 request_state(
-                    &mut state_join_set,
-                    &mut pending_state,
                     &mut last_requested_state,
                     &self.gateway,
                     claimed_feeds.processing_state(pending_completion_count),
-                );
+                )
+                .await;
             }
 
             if fetch_join_set.is_empty() {
                 if !claimed_feeds.has_tasks() {
                     if pending_completion_count == 0 {
-                        flush_state_updates(&mut state_join_set, &mut pending_state, &self.gateway)
-                            .await;
-                        request_state(
-                            &mut state_join_set,
-                            &mut pending_state,
-                            &mut last_requested_state,
-                            &self.gateway,
-                            idle_state(),
-                        );
-                        flush_state_updates(&mut state_join_set, &mut pending_state, &self.gateway)
-                            .await;
+                        if claimed_any_tasks {
+                            self.last_requested_state = last_requested_state;
+                            return Ok(true);
+                        }
+                        request_state(&mut last_requested_state, &self.gateway, idle_state()).await;
                         self.last_requested_state = last_requested_state;
                         return Ok(claimed_any_tasks);
                     }
@@ -273,83 +262,19 @@ fn finish_completion_ack(
     Ok(())
 }
 
-fn request_state<G>(
-    state_join_set: &mut JoinSet<(super::RssGatewayState, Result<()>)>,
-    pending_state: &mut Option<super::RssGatewayState>,
+async fn request_state<G>(
     last_requested_state: &mut Option<super::RssGatewayState>,
     gateway: &G,
     state: super::RssGatewayState,
 ) where
     G: RssGateway + Clone + Send + Sync + 'static,
 {
-    if matches_reporting_state(last_requested_state.as_ref(), &state)
-        || matches_reporting_state(pending_state.as_ref(), &state)
-    {
+    if matches_reporting_state(last_requested_state.as_ref(), &state) {
         return;
     }
     *last_requested_state = Some(state.clone());
-    if state_join_set.is_empty() {
-        spawn_state_update(state_join_set, gateway, state);
-        return;
-    }
-
-    *pending_state = Some(state);
-}
-
-fn spawn_state_update<G>(
-    state_join_set: &mut JoinSet<(super::RssGatewayState, Result<()>)>,
-    gateway: &G,
-    state: super::RssGatewayState,
-) where
-    G: RssGateway + Clone + Send + Sync + 'static,
-{
-    let gateway = gateway.clone();
-    state_join_set.spawn(async move {
-        let result = gateway.update_state(state.clone()).await;
-        (state, result)
-    });
-}
-
-fn reconcile_state_updates<G>(
-    state_join_set: &mut JoinSet<(super::RssGatewayState, Result<()>)>,
-    pending_state: &mut Option<super::RssGatewayState>,
-    gateway: &G,
-) where
-    G: RssGateway + Clone + Send + Sync + 'static,
-{
-    while let Some(joined) = state_join_set.try_join_next() {
-        match joined {
-            Ok((_, Ok(()))) => {}
-            Ok((_, Err(error))) => warn!("rss worker state update failed: {error}"),
-            Err(error) => warn!("rss worker state task join failed: {error}"),
-        }
-
-        if let Some(state) = pending_state.take() {
-            spawn_state_update(state_join_set, gateway, state);
-        }
-    }
-}
-
-async fn flush_state_updates<G>(
-    state_join_set: &mut JoinSet<(super::RssGatewayState, Result<()>)>,
-    pending_state: &mut Option<super::RssGatewayState>,
-    gateway: &G,
-) where
-    G: RssGateway + Clone + Send + Sync + 'static,
-{
-    if let Some(state) = pending_state.take() {
-        spawn_state_update(state_join_set, gateway, state);
-    }
-
-    while let Some(joined) = state_join_set.join_next().await {
-        match joined {
-            Ok((_, Ok(()))) => {}
-            Ok((_, Err(error))) => warn!("rss worker state update failed: {error}"),
-            Err(error) => warn!("rss worker state task join failed: {error}"),
-        }
-        if let Some(state) = pending_state.take() {
-            spawn_state_update(state_join_set, gateway, state);
-        }
+    if let Err(error) = gateway.update_state(state).await {
+        warn!("rss worker state update failed: {error}");
     }
 }
 

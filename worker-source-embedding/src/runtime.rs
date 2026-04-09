@@ -11,17 +11,14 @@ use serde::Serialize;
 
 use crate::error::{EmbeddingWorkerError, Result};
 
-const ORT_DYLIB_NAME: &str = "libonnxruntime.so";
-const ORT_SYSTEM_CANDIDATES: &[&str] = &[
-    "/usr/lib/libonnxruntime.so",
-    "/usr/lib64/libonnxruntime.so",
-    "/usr/local/lib/libonnxruntime.so",
-    "/usr/local/lib64/libonnxruntime.so",
-    "/lib/x86_64-linux-gnu/libonnxruntime.so",
-    "/lib/aarch64-linux-gnu/libonnxruntime.so",
-];
-
 static ORT_RUNTIME_PATH: OnceLock<std::result::Result<PathBuf, String>> = OnceLock::new();
+
+pub fn onnxruntime_dylib_name() -> &'static str {
+    match env::consts::OS {
+        "macos" => "libonnxruntime.dylib",
+        _ => "libonnxruntime.so",
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,6 +28,7 @@ pub enum ExecutionBackend {
     Cpu,
     Cuda,
     WebGpu,
+    CoreMl,
 }
 
 impl ExecutionBackend {
@@ -40,6 +38,7 @@ impl ExecutionBackend {
             Self::Cpu => "cpu",
             Self::Cuda => "cuda",
             Self::WebGpu => "webgpu",
+            Self::CoreMl => "coreml",
         }
     }
 }
@@ -59,6 +58,7 @@ impl FromStr for ExecutionBackend {
             "cpu" => Ok(Self::Cpu),
             "cuda" => Ok(Self::Cuda),
             "webgpu" | "wgpu" => Ok(Self::WebGpu),
+            "coreml" => Ok(Self::CoreMl),
             other => Err(EmbeddingWorkerError::Runtime(format!(
                 "unsupported execution backend: {other}"
             ))),
@@ -72,6 +72,7 @@ pub enum RuntimeBundle {
     None,
     Cuda12,
     WebGpu,
+    CoreMl,
 }
 
 impl RuntimeBundle {
@@ -80,6 +81,7 @@ impl RuntimeBundle {
             Self::None => "none",
             Self::Cuda12 => "cuda12",
             Self::WebGpu => "webgpu",
+            Self::CoreMl => "coreml",
         }
     }
 }
@@ -133,35 +135,51 @@ pub fn probe_system(
 ) -> RuntimeProbe {
     let os = env::consts::OS.to_string();
     let arch = env::consts::ARCH.to_string();
-    let (distro_id, distro_name, distro_version) = read_os_release();
+    let (distro_id, distro_name, distro_version) = if os == "linux" {
+        read_os_release()
+    } else {
+        (None, None, None)
+    };
 
-    let gpu_vendors = detect_gpu_vendors();
-    let has_render_node = detect_render_node();
-    let has_nvidia_smi = command_exists("nvidia-smi");
-    let has_cuda_driver = has_shared_library("libcuda.so") || has_shared_library("libcuda.so.1");
-    let has_vulkan_loader =
-        has_shared_library("libvulkan.so") || has_shared_library("libvulkan.so.1");
+    let gpu_vendors = if os == "linux" {
+        detect_gpu_vendors()
+    } else {
+        Vec::new()
+    };
+    let has_render_node = os == "linux" && detect_render_node();
+    let has_nvidia_smi = os == "linux" && command_exists("nvidia-smi");
+    let has_cuda_driver =
+        os == "linux" && (has_shared_library("libcuda.so") || has_shared_library("libcuda.so.1"));
+    let has_vulkan_loader = os == "linux"
+        && (has_shared_library("libvulkan.so") || has_shared_library("libvulkan.so.1"));
 
     let mut notes = Vec::new();
-    if arch != "x86_64" {
+    if os == "linux" && arch != "x86_64" {
         notes.push(
             "current installer only ships GPU ONNX Runtime bundles for linux x86_64; CPU runtime will be used"
                 .to_string(),
         );
     }
-    if gpu_vendors.contains(&GpuVendor::Nvidia) && !has_cuda_driver {
+    if os == "macos" && arch == "aarch64" {
+        notes.push(
+            "Apple Silicon detected; CoreML with CPUAndNeuralEngine is the recommended acceleration backend"
+                .to_string(),
+        );
+    }
+    if os == "linux" && gpu_vendors.contains(&GpuVendor::Nvidia) && !has_cuda_driver {
         notes.push(
             "nvidia GPU detected but CUDA driver/runtime was not found; CUDA bundle is not recommended"
                 .to_string(),
         );
     }
-    if !gpu_vendors.is_empty() && !has_vulkan_loader {
+    if os == "linux" && !gpu_vendors.is_empty() && !has_vulkan_loader {
         notes.push(
             "GPU detected but Vulkan loader was not found; WebGPU bundle is not recommended"
                 .to_string(),
         );
     }
-    if arch == "x86_64"
+    if os == "linux"
+        && arch == "x86_64"
         && gpu_vendors
             .iter()
             .any(|vendor| matches!(vendor, GpuVendor::Amd | GpuVendor::Intel | GpuVendor::Other))
@@ -180,6 +198,7 @@ pub fn probe_system(
 
     let (recommended_backend, recommended_runtime_bundle) = recommend_runtime(
         preferred_backend,
+        &os,
         &arch,
         &gpu_vendors,
         has_cuda_driver,
@@ -191,7 +210,7 @@ pub fn probe_system(
         ));
     } else if matches!(
         recommended_backend,
-        ExecutionBackend::Cuda | ExecutionBackend::WebGpu
+        ExecutionBackend::Cuda | ExecutionBackend::WebGpu | ExecutionBackend::CoreMl
     ) && !runtime_support
         .available_execution_providers
         .contains(&recommended_backend)
@@ -248,7 +267,8 @@ pub fn ensure_ort_runtime_loaded(explicit_ort_dylib_path: Option<&Path>) -> Resu
         }
 
         Err(format!(
-            "unable to locate {ORT_DYLIB_NAME}; tried: {}",
+            "unable to locate {}; tried: {}",
+            onnxruntime_dylib_name(),
             candidates
                 .iter()
                 .map(|path| path.display().to_string())
@@ -311,6 +331,12 @@ pub fn execution_providers(
                 ep::CUDA::default().build(),
                 ep::CPU::default().build(),
             ],
+            ExecutionBackend::CoreMl => vec![
+                ep::CoreML::default()
+                    .with_compute_units(ep::coreml::ComputeUnits::CPUAndNeuralEngine)
+                    .build(),
+                ep::CPU::default().build(),
+            ],
             _ => vec![ep::CPU::default().build()],
         },
         ExecutionBackend::Cpu => vec![ep::CPU::default().build().error_on_failure()],
@@ -320,6 +346,13 @@ pub fn execution_providers(
         ],
         ExecutionBackend::WebGpu => vec![
             ep::WebGPU::default().build().error_on_failure(),
+            ep::CPU::default().build(),
+        ],
+        ExecutionBackend::CoreMl => vec![
+            ep::CoreML::default()
+                .with_compute_units(ep::coreml::ComputeUnits::CPUAndNeuralEngine)
+                .build()
+                .error_on_failure(),
             ep::CPU::default().build(),
         ],
     }
@@ -332,6 +365,9 @@ pub fn available_execution_providers() -> Vec<ExecutionBackend> {
     }
     if ep::WebGPU::default().is_available().unwrap_or(false) {
         providers.push(ExecutionBackend::WebGpu);
+    }
+    if ep::CoreML::default().is_available().unwrap_or(false) {
+        providers.push(ExecutionBackend::CoreMl);
     }
     providers.push(ExecutionBackend::Cpu);
     providers
@@ -366,6 +402,7 @@ fn format_execution_backends(backends: &[ExecutionBackend]) -> String {
 
 fn recommend_runtime(
     preferred_backend: ExecutionBackend,
+    os: &str,
     arch: &str,
     gpu_vendors: &[GpuVendor],
     has_cuda_driver: bool,
@@ -374,21 +411,35 @@ fn recommend_runtime(
     match preferred_backend {
         ExecutionBackend::Cpu => (ExecutionBackend::Cpu, RuntimeBundle::None),
         ExecutionBackend::Cuda => {
-            if arch == "x86_64" {
+            if os == "linux" && arch == "x86_64" {
                 (ExecutionBackend::Cuda, RuntimeBundle::Cuda12)
             } else {
                 (ExecutionBackend::Cpu, RuntimeBundle::None)
             }
         }
         ExecutionBackend::WebGpu => {
-            if arch == "x86_64" {
+            if os == "linux" && arch == "x86_64" {
                 (ExecutionBackend::WebGpu, RuntimeBundle::WebGpu)
             } else {
                 (ExecutionBackend::Cpu, RuntimeBundle::None)
             }
         }
+        ExecutionBackend::CoreMl => {
+            if os == "macos" && arch == "aarch64" {
+                (ExecutionBackend::CoreMl, RuntimeBundle::CoreMl)
+            } else {
+                (ExecutionBackend::Cpu, RuntimeBundle::None)
+            }
+        }
         ExecutionBackend::Auto => {
-            if arch == "x86_64" && gpu_vendors.contains(&GpuVendor::Nvidia) && has_cuda_driver {
+            if os == "macos" && arch == "aarch64" {
+                return (ExecutionBackend::CoreMl, RuntimeBundle::CoreMl);
+            }
+            if os == "linux"
+                && arch == "x86_64"
+                && gpu_vendors.contains(&GpuVendor::Nvidia)
+                && has_cuda_driver
+            {
                 return (ExecutionBackend::Cuda, RuntimeBundle::Cuda12);
             }
             (ExecutionBackend::Cpu, RuntimeBundle::None)
@@ -404,16 +455,35 @@ fn ort_dylib_candidates(explicit_ort_dylib_path: Option<&Path>) -> Vec<PathBuf> 
 
     if let Ok(current_exe) = env::current_exe() {
         if let Some(parent) = current_exe.parent() {
-            candidates.push(parent.join("lib").join(ORT_DYLIB_NAME));
-            candidates.push(parent.join(ORT_DYLIB_NAME));
+            candidates.push(parent.join("lib").join(onnxruntime_dylib_name()));
+            candidates.push(parent.join(onnxruntime_dylib_name()));
         }
     }
 
-    for candidate in ORT_SYSTEM_CANDIDATES {
+    for candidate in onnxruntime_system_candidates() {
         candidates.push(PathBuf::from(candidate));
     }
 
     dedupe_paths(candidates)
+}
+
+fn onnxruntime_system_candidates() -> &'static [&'static str] {
+    match env::consts::OS {
+        "macos" => &[
+            "/opt/homebrew/lib/libonnxruntime.dylib",
+            "/usr/local/lib/libonnxruntime.dylib",
+            "/usr/lib/libonnxruntime.dylib",
+        ],
+        _ => &[
+            "/usr/lib/manifeed/embedding/runtime/lib/libonnxruntime.so",
+            "/usr/lib/libonnxruntime.so",
+            "/usr/lib64/libonnxruntime.so",
+            "/usr/local/lib/libonnxruntime.so",
+            "/usr/local/lib64/libonnxruntime.so",
+            "/lib/x86_64-linux-gnu/libonnxruntime.so",
+            "/lib/aarch64-linux-gnu/libonnxruntime.so",
+        ],
+    }
 }
 
 fn dedupe_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
@@ -536,5 +606,55 @@ fn shared_library_candidates(name: &str) -> &'static [&'static str] {
             "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
         ],
         _ => &[],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{recommend_runtime, ExecutionBackend, GpuVendor, RuntimeBundle};
+
+    #[test]
+    fn auto_prefers_coreml_on_macos_apple_silicon() {
+        let (backend, bundle) = recommend_runtime(
+            ExecutionBackend::Auto,
+            "macos",
+            "aarch64",
+            &[],
+            false,
+            false,
+        );
+
+        assert_eq!(backend, ExecutionBackend::CoreMl);
+        assert_eq!(bundle, RuntimeBundle::CoreMl);
+    }
+
+    #[test]
+    fn auto_prefers_cuda_on_linux_nvidia() {
+        let (backend, bundle) = recommend_runtime(
+            ExecutionBackend::Auto,
+            "linux",
+            "x86_64",
+            &[GpuVendor::Nvidia],
+            true,
+            true,
+        );
+
+        assert_eq!(backend, ExecutionBackend::Cuda);
+        assert_eq!(bundle, RuntimeBundle::Cuda12);
+    }
+
+    #[test]
+    fn explicit_coreml_falls_back_to_cpu_outside_supported_target() {
+        let (backend, bundle) = recommend_runtime(
+            ExecutionBackend::CoreMl,
+            "linux",
+            "x86_64",
+            &[],
+            false,
+            false,
+        );
+
+        assert_eq!(backend, ExecutionBackend::Cpu);
+        assert_eq!(bundle, RuntimeBundle::None);
     }
 }

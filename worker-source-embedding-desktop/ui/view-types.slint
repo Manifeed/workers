@@ -1,0 +1,25 @@
+export struct NoticeView {
+    visible: bool,
+    text: string,
+    tone: int,
+}
+
+export struct SettingsCardView {
+    version_line: string,
+    can_open_update: bool,
+    can_open_release_notes: bool,
+    notice: NoticeView,
+}
+
+export struct WorkerCardView {
+    version_line: string,
+    status_label: string,
+    status_tone: int,
+    show_install_action: bool,
+    install_label: string,
+    run_label: string,
+    can_toggle_run: bool,
+    can_uninstall: bool,
+    busy: bool,
+    notice: NoticeView,
+}

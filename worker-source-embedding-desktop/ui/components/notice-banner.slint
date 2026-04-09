@@ -1,0 +1,33 @@
+import { Theme } from "../theme.slint";
+import { NoticeView } from "../view-types.slint";
+
+export component NoticeBanner inherits Rectangle {
+	in property <NoticeView> notice;
+
+	visible: root.notice.visible;
+	clip: true;
+	min-height: Theme.btn-height;
+	border-radius: Theme.rad-m;
+	border-width: 1px;
+	border-color: Theme.banner-border(root.notice.tone);
+	background: Theme.banner-bg(root.notice.tone);
+
+	touch := TouchArea {
+		clicked => {
+			TextInputInterface.text-input-focused = false;
+		}
+	}
+
+	content := HorizontalLayout {
+		padding: Theme.sp-md;
+		padding-left: Theme.sp-2xl;
+
+		Text {
+			text: root.notice.text;
+			color: Theme.banner-text(root.notice.tone);
+			font-family: Theme.font-ui;
+			font-size: Theme.fs-body;
+			wrap: word-wrap;
+		}
+	}
+}

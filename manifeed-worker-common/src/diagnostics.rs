@@ -11,6 +11,7 @@ pub struct WorkerConnectionCheck {
     pub worker_type: Option<String>,
     pub worker_name: Option<String>,
     pub checked_at: DateTime<Utc>,
+    pub status_code: Option<u16>,
     pub error: Option<String>,
 }
 
@@ -26,14 +27,16 @@ pub fn check_worker_connection(api_url: &str, api_key: &str) -> Result<WorkerCon
         .get(format!("{}/workers/ping", api_url.trim_end_matches('/')))
         .bearer_auth(api_key)
         .send()?;
+    let status = response.status();
 
-    if response.status() != StatusCode::OK {
+    if status != StatusCode::OK {
         let body = response.text().unwrap_or_else(|_| String::new());
         return Ok(WorkerConnectionCheck {
             ok: false,
             worker_type: None,
             worker_name: None,
             checked_at: Utc::now(),
+            status_code: Some(status.as_u16()),
             error: Some(body),
         });
     }
@@ -46,6 +49,7 @@ pub fn check_worker_connection(api_url: &str, api_key: &str) -> Result<WorkerCon
         worker_type: Some(payload.worker_type),
         worker_name: Some(payload.worker_name),
         checked_at: Utc::now(),
+        status_code: Some(StatusCode::OK.as_u16()),
         error: None,
     })
 }

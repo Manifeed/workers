@@ -7,15 +7,22 @@ use reqwest::StatusCode;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
+use crate::error::{user_facing_error_message, Result};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerReleaseManifest {
+    pub artifact_name: String,
+    pub family: String,
     pub product: String,
     pub platform: String,
     pub arch: String,
     pub latest_version: String,
     pub minimum_supported_version: String,
+    pub worker_version: Option<String>,
+    pub artifact_kind: String,
+    pub sha256: String,
+    pub runtime_bundle: Option<String>,
+    pub download_auth: String,
     pub download_url: String,
     pub release_notes_url: String,
     pub published_at: DateTime<Utc>,
@@ -62,10 +69,20 @@ pub fn check_worker_release_status(
     current_version: &str,
     cache_path: &Path,
 ) -> Result<WorkerReleaseStatus> {
+    check_worker_release_status_with_runtime(api_url, product, current_version, None, cache_path)
+}
+
+pub fn check_worker_release_status_with_runtime(
+    api_url: &str,
+    product: &str,
+    current_version: &str,
+    runtime_bundle: Option<&str>,
+    cache_path: &Path,
+) -> Result<WorkerReleaseStatus> {
     let platform = resolve_release_platform();
     let arch = resolve_release_arch();
 
-    match fetch_manifest(api_url, product, &platform, &arch) {
+    match fetch_manifest(api_url, product, &platform, &arch, runtime_bundle) {
         Ok(manifest) => {
             persist_manifest_cache(cache_path, &manifest)?;
             Ok(classify_release_status(
@@ -92,7 +109,7 @@ pub fn check_worker_release_status(
                 manifest: None,
                 checked_at: Utc::now(),
                 from_cache: false,
-                message: Some(format!("version check unavailable: {error}")),
+                message: Some(user_facing_error_message(&error)),
             }),
             Err(cache_error) => Ok(WorkerReleaseStatus {
                 current_version: current_version.to_string(),
@@ -103,7 +120,8 @@ pub fn check_worker_release_status(
                 checked_at: Utc::now(),
                 from_cache: false,
                 message: Some(format!(
-                    "version check unavailable: {error}; cache read failed: {cache_error}"
+                    "{} Cache read also failed: {cache_error}",
+                    user_facing_error_message(&error)
                 )),
             }),
         },
@@ -115,13 +133,22 @@ fn fetch_manifest(
     product: &str,
     platform: &str,
     arch: &str,
+    runtime_bundle: Option<&str>,
 ) -> Result<WorkerReleaseManifest> {
+    let mut query = vec![("product", product), ("platform", platform), ("arch", arch)];
+    if let Some(runtime_bundle_value) = runtime_bundle
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        query.push(("runtime_bundle", runtime_bundle_value));
+    }
+
     let response = Client::new()
         .get(format!(
             "{}/workers/releases/manifest",
             api_url.trim_end_matches('/')
         ))
-        .query(&[("product", product), ("platform", platform), ("arch", arch)])
+        .query(&query)
         .send()?;
 
     let status = response.status();

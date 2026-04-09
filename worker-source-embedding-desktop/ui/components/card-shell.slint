@@ -1,0 +1,18 @@
+import { Theme } from "../theme.slint";
+
+export component CardShell inherits Rectangle {
+	in property <length> shell_content_height: 0px;
+
+	min-height: root.shell_content_height;
+	max-height: root.shell_content_height;
+	border-radius: Theme.rad-l;
+	border-width: 1px;
+	border-color: Theme.surface-border;
+	background: Theme.surface-bg;
+
+	touch := TouchArea {
+		clicked => {
+			TextInputInterface.text-input-focused = false;
+		}
+	}
+}

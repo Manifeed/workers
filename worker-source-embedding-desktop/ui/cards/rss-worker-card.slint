@@ -1,0 +1,42 @@
+import { Theme } from "../theme.slint";
+import { FieldLabel } from "../components/field-label.slint";
+import { AppComboBox } from "../controls/app-combo-box.slint";
+import { AppLineEdit } from "../controls/app-line-edit.slint";
+import { AppSpinBox } from "../controls/app-spin-box.slint";
+import { WorkerCardFrame } from "worker-card-frame.slint";
+
+export component RssWorkerCard inherits WorkerCardFrame {
+	in-out property <string> api_key;
+	in-out property <int> run_mode_index;
+	in-out property <int> max_requests;
+	title: "RSS Worker";
+
+	FieldLabel { text: "API key"; }
+
+	AppLineEdit {
+		height: Theme.btn-height;
+		enabled: !root.app_busy;
+		text <=> root.api_key;
+		placeholder-text: "Bearer token";
+		input-type: InputType.password;
+	}
+
+	FieldLabel { text: "Run mode"; }
+
+	AppComboBox {
+		height: Theme.btn-height;
+		enabled: !root.app_busy;
+		model: ["On Demand", "Background"];
+		current-index <=> root.run_mode_index;
+	}
+
+	FieldLabel { text: "Max concurrent requests"; }
+
+	AppSpinBox {
+		height: Theme.btn-height;
+		enabled: !root.app_busy;
+		minimum: 1;
+		maximum: 256;
+		value <=> root.max_requests;
+	}
+}

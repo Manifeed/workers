@@ -1,0 +1,38 @@
+import { Theme } from "../theme.slint";
+
+export component EditorialButton inherits Rectangle {
+	in property <string> text;
+	in property <bool> primary: false;
+	in property <bool> enabled: true;
+	callback pressed;
+
+	height: Theme.btn-height;
+	border-radius: Theme.rad-m;
+	border-width: 1px;
+	border-color: !enabled ? Theme.btn-border : primary ? Theme.accent : Theme.btn-border;
+	background: !enabled ? Theme.btn-disabled : primary ? Theme.accent : Theme.btn-bg;
+	clip: true;
+
+	HorizontalLayout {
+		padding: Theme.sp-base;
+
+		Text {
+			text: root.text;
+			color: Theme.btn-text;
+			font-family: Theme.font-ui;
+			font-size: Theme.fs-body;
+			font-weight: Theme.fw-bold;
+			horizontal-alignment: center;
+			vertical-alignment: center;
+			horizontal-stretch: 1;
+		}
+	}
+
+	touch := TouchArea {
+		enabled: root.enabled;
+		clicked => {
+			TextInputInterface.text-input-focused = false;
+			root.pressed();
+		}
+	}
+}

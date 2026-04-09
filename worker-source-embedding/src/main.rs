@@ -5,8 +5,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use manifeed_worker_common::{
     app_paths, check_worker_connection, check_worker_release_status, install_user_service,
     load_workers_config, resolve_workers_config_path, save_workers_config, start_user_service,
-    stop_user_service, uninstall_user_service, AccelerationMode, ReleaseCheckStatus, ServiceMode,
-    WorkerStatusHandle, WorkerStatusInit, WorkerType, DEFAULT_API_URL,
+    stop_user_service, uninstall_user_service, AccelerationMode, EmbeddingRuntimeBundle,
+    ReleaseCheckStatus, ServiceMode, WorkerStatusHandle, WorkerStatusInit, WorkerType,
+    DEFAULT_API_URL,
 };
 use serde_json::json;
 use tracing::{error, info, warn};
@@ -16,7 +17,7 @@ use worker_source_embedding::config::{
 };
 use worker_source_embedding::huggingface::HuggingFaceOnnxModelManager;
 use worker_source_embedding::runtime::{
-    probe_system, verify_execution_backend_support, ExecutionBackend,
+    onnxruntime_dylib_name, probe_system, verify_execution_backend_support, ExecutionBackend,
 };
 use worker_source_embedding::worker::EmbeddingWorker;
 
@@ -35,7 +36,6 @@ struct Cli {
 enum Command {
     Run(RunArgs),
     Probe(ProbeArgs),
-    Install(InstallArgs),
     Config(ConfigArgs),
     Doctor(CommonConfigArgs),
     Version(CommonConfigArgs),
@@ -71,18 +71,6 @@ struct ProbeArgs {
 }
 
 #[derive(Args, Clone, Debug)]
-struct InstallArgs {
-    #[arg(long)]
-    config: Option<PathBuf>,
-    #[arg(long)]
-    api_key: String,
-    #[arg(long, value_enum)]
-    acceleration: Option<AccelerationArg>,
-    #[arg(long)]
-    install_service: bool,
-}
-
-#[derive(Args, Clone, Debug)]
 struct ConfigArgs {
     #[command(subcommand)]
     command: ConfigCommand,
@@ -106,8 +94,10 @@ enum ConfigCommand {
 
 #[derive(Clone, Debug, ValueEnum)]
 enum ConfigField {
+    ApiUrl,
     ApiKey,
     Acceleration,
+    RuntimeBundle,
     ServiceMode,
 }
 
@@ -141,6 +131,7 @@ enum ProviderArg {
     Cpu,
     Cuda,
     Webgpu,
+    Coreml,
 }
 
 #[tokio::main]
@@ -151,7 +142,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command.unwrap_or(Command::Run(RunArgs::default())) {
         Command::Run(args) => run_command(args).await,
         Command::Probe(args) => probe_command(args),
-        Command::Install(args) => install_command(args),
         Command::Config(args) => config_command(args),
         Command::Doctor(args) => doctor_command(args),
         Command::Version(args) => version_command(args),
@@ -217,6 +207,15 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
                     tokio::time::sleep(Duration::from_secs(config.poll_seconds)).await;
                 }
             }
+            Err(error) if error.is_auth_error() => {
+                let label = error.user_facing_message();
+                let _ = status.mark_error(label.clone());
+                error!(
+                    "worker_source_embedding fatal authentication error: {}",
+                    error
+                );
+                return Err(Box::new(error));
+            }
             Err(error) if error.is_network_error() => {
                 warn!(
                     retry_delay_seconds = config.poll_seconds,
@@ -225,7 +224,7 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
                 tokio::time::sleep(Duration::from_secs(config.poll_seconds)).await;
             }
             Err(error) => {
-                let _ = status.mark_error(error.to_string());
+                let _ = status.mark_error(error.user_facing_message());
                 error!("worker_source_embedding iteration failed: {}", error);
                 tokio::time::sleep(Duration::from_secs(RUN_ERROR_SLEEP_SECONDS)).await;
             }
@@ -247,51 +246,13 @@ fn probe_command(args: ProbeArgs) -> Result<(), Box<dyn std::error::Error>> {
     let ort_dylib_path = app_paths()?
         .worker_paths(WorkerType::SourceEmbedding)
         .install_dir
-        .join("runtime/lib/libonnxruntime.so");
+        .join("runtime/lib")
+        .join(onnxruntime_dylib_name());
     let probe = probe_system(
         provider,
         ort_dylib_path.exists().then_some(ort_dylib_path.as_path()),
     );
     println!("{}", serde_json::to_string_pretty(&probe)?);
-    Ok(())
-}
-
-fn install_command(args: InstallArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let current_exe = std::env::current_exe()?;
-    let config_path = resolve_workers_config_path(args.config.as_deref())?;
-    let (_, mut config) = load_workers_config(Some(config_path.as_path()))?;
-    config.install_worker(
-        WorkerType::SourceEmbedding,
-        args.api_key.clone(),
-        Some(current_exe.clone()),
-    );
-    if let Some(acceleration) = args.acceleration {
-        config.embedding.acceleration_mode = map_acceleration_arg(acceleration);
-    }
-    if args.install_service {
-        config.embedding.service_mode = ServiceMode::Background;
-    }
-    save_workers_config(&config_path, &config)?;
-
-    if args.install_service {
-        install_user_service(
-            WorkerType::SourceEmbedding,
-            current_exe.as_path(),
-            config_path.as_path(),
-        )?;
-    }
-
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json!({
-            "ok": true,
-            "worker_type": WorkerType::SourceEmbedding.as_str(),
-            "config_path": config_path,
-            "binary_path": current_exe,
-            "service_mode": config.embedding.service_mode,
-            "acceleration_mode": config.embedding.acceleration_mode,
-        }))?
-    );
     Ok(())
 }
 
@@ -311,14 +272,16 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
                 "{}",
                 serde_json::to_string_pretty(&json!({
                     "config_path": config_path,
+                    "api_url": config_value.api_url,
                     "embedding": {
                         "enabled": config_value.embedding.enabled,
                         "api_key": api_key,
                         "service_mode": config_value.embedding.service_mode,
-                        "binary_path": config_value.embedding.binary_path,
+                        "installed_version": config_value.embedding.installed_version,
                         "worker_version": config_value.embedding.worker_version,
                         "inference_batch_size": config_value.embedding.inference_batch_size,
                         "acceleration_mode": config_value.embedding.acceleration_mode,
+                        "runtime_bundle": config_value.embedding.runtime_bundle,
                     }
                 }))?
             );
@@ -332,9 +295,13 @@ fn config_command(args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
             let config_path = resolve_workers_config_path(config.as_deref())?;
             let (_, mut config_value) = load_workers_config(Some(config_path.as_path()))?;
             match field {
+                ConfigField::ApiUrl => config_value.api_url = value,
                 ConfigField::ApiKey => config_value.embedding.api_key = value,
                 ConfigField::Acceleration => {
                     config_value.embedding.acceleration_mode = parse_acceleration_mode(&value)?;
+                }
+                ConfigField::RuntimeBundle => {
+                    config_value.embedding.runtime_bundle = parse_runtime_bundle(&value)?;
                 }
                 ConfigField::ServiceMode => {
                     config_value.embedding.service_mode = parse_service_mode(&value)?;
@@ -376,11 +343,13 @@ fn doctor_command(args: CommonConfigArgs) -> Result<(), Box<dyn std::error::Erro
             "worker_type": WorkerType::SourceEmbedding.as_str(),
             "app_version": APP_VERSION,
             "config_path": config.config_path,
+            "api_url": config.api_url,
             "status_file": worker_paths.status_file,
             "log_file": worker_paths.log_file,
             "model_cache_dir": worker_paths.cache_dir,
-            "binary_path": stored_config.embedding.binary_path,
+            "installed_version": stored_config.embedding.installed_version,
             "acceleration_mode": config.acceleration_mode,
+            "runtime_bundle": config.runtime_bundle,
             "execution_backend": config.execution_backend,
             "connection": connection,
             "release": release,
@@ -416,11 +385,7 @@ fn service_command(args: ServiceArgs) -> Result<(), Box<dyn std::error::Error>> 
     match args.command {
         ServiceCommand::Install { config } => {
             let config_path = resolve_workers_config_path(config.as_deref())?;
-            let (_, config_value) = load_workers_config(Some(config_path.as_path()))?;
-            let binary_path = config_value
-                .embedding
-                .binary_path
-                .unwrap_or(std::env::current_exe()?);
+            let binary_path = std::env::current_exe()?;
             install_user_service(
                 WorkerType::SourceEmbedding,
                 binary_path.as_path(),
@@ -490,6 +455,16 @@ fn parse_acceleration_mode(value: &str) -> Result<AccelerationMode, Box<dyn std:
     }
 }
 
+fn parse_runtime_bundle(value: &str) -> Result<EmbeddingRuntimeBundle, Box<dyn std::error::Error>> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "none" => Ok(EmbeddingRuntimeBundle::None),
+        "cuda12" => Ok(EmbeddingRuntimeBundle::Cuda12),
+        "webgpu" => Ok(EmbeddingRuntimeBundle::WebGpu),
+        "coreml" => Ok(EmbeddingRuntimeBundle::CoreMl),
+        other => Err(format!("unsupported runtime bundle: {other}").into()),
+    }
+}
+
 fn map_acceleration_arg(value: AccelerationArg) -> AccelerationMode {
     match value {
         AccelerationArg::Auto => AccelerationMode::Auto,
@@ -504,6 +479,7 @@ fn map_provider_arg(value: ProviderArg) -> ExecutionBackend {
         ProviderArg::Cpu => ExecutionBackend::Cpu,
         ProviderArg::Cuda => ExecutionBackend::Cuda,
         ProviderArg::Webgpu => ExecutionBackend::WebGpu,
+        ProviderArg::Coreml => ExecutionBackend::CoreMl,
     }
 }
 

@@ -4,8 +4,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use manifeed_worker_common::{
-    app_paths, load_workers_config, AccelerationMode, WorkerAuthConfig, WorkerError, WorkerType,
-    DEFAULT_API_URL, DEFAULT_EMBEDDING_WORKER_VERSION,
+    app_paths, installed_embedding_runtime_library_path, load_workers_config, AccelerationMode,
+    EmbeddingRuntimeBundle, WorkerAuthConfig, WorkerError, WorkerType,
+    DEFAULT_EMBEDDING_WORKER_VERSION,
 };
 
 use crate::error::Result;
@@ -33,6 +34,7 @@ pub struct EmbeddingWorkerConfig {
     pub session_ttl_seconds: u32,
     pub inference_batch_size: usize,
     pub acceleration_mode: AccelerationMode,
+    pub runtime_bundle: EmbeddingRuntimeBundle,
     pub execution_backend: ExecutionBackend,
     pub ort_dylib_path: Option<PathBuf>,
     pub status_file_path: PathBuf,
@@ -51,6 +53,13 @@ impl EmbeddingWorkerConfig {
         let app_dirs = app_paths()?;
         let worker_paths = app_dirs.worker_paths(WorkerType::SourceEmbedding);
         let (config_path, stored) = load_workers_config(overrides.config_path.as_deref())?;
+        let api_url = optional_env_string("MANIFEED_API_URL")
+            .or_else(|| optional_env_string("MANIFEED_WORKER_API_URL"))
+            .unwrap_or_else(|| {
+                stored
+                    .worker_api_url(WorkerType::SourceEmbedding)
+                    .to_string()
+            });
         let acceleration_mode = overrides
             .acceleration_mode
             .or_else(|| {
@@ -58,13 +67,14 @@ impl EmbeddingWorkerConfig {
                     .and_then(parse_acceleration_mode)
             })
             .unwrap_or(stored.embedding.acceleration_mode);
-        let derived_ort_dylib_path = worker_paths
-            .install_dir
-            .join("runtime/lib/libonnxruntime.so");
+        let runtime_bundle = optional_env_string("MANIFEED_EMBEDDING_RUNTIME_BUNDLE")
+            .and_then(parse_runtime_bundle)
+            .unwrap_or(stored.embedding.runtime_bundle);
         let ort_dylib_path = optional_env_path("MANIFEED_EMBEDDING_ORT_DYLIB_PATH").or_else(|| {
-            derived_ort_dylib_path
+            let local_ort_dylib_path = installed_embedding_runtime_library_path().ok()?;
+            local_ort_dylib_path
                 .exists()
-                .then_some(derived_ort_dylib_path.clone())
+                .then_some(local_ort_dylib_path)
         });
         let execution_backend = resolve_execution_backend(
             acceleration_mode,
@@ -86,18 +96,19 @@ impl EmbeddingWorkerConfig {
             })
             .ok_or_else(|| {
                 WorkerError::Config(
-                    "missing worker API key; run `worker-source-embedding install --api-key ...` or set MANIFEED_WORKER_API_KEY"
+                    "missing worker API key; set it in the desktop app or with `worker-source-embedding config set api-key ...`"
                         .to_string(),
                 )
             })?;
 
         Ok(Self {
-            api_url: DEFAULT_API_URL.to_string(),
+            api_url,
             poll_seconds: BUILTIN_EMBEDDING_POLL_SECONDS,
             lease_seconds: BUILTIN_EMBEDDING_LEASE_SECONDS,
             session_ttl_seconds: env_or_value("MANIFEED_EMBEDDING_SESSION_TTL_SECONDS", 3600u32)?,
             inference_batch_size: stored.embedding.inference_batch_size.max(1),
             acceleration_mode,
+            runtime_bundle,
             execution_backend,
             ort_dylib_path,
             status_file_path: worker_paths.status_file,
@@ -148,7 +159,9 @@ fn resolve_execution_backend(
         AccelerationMode::Gpu => {
             let probe = probe_system(ExecutionBackend::Auto, ort_dylib_path);
             match probe.recommended_backend {
-                ExecutionBackend::Cuda | ExecutionBackend::WebGpu => Ok(probe.recommended_backend),
+                ExecutionBackend::Cuda | ExecutionBackend::WebGpu | ExecutionBackend::CoreMl => {
+                    Ok(probe.recommended_backend)
+                }
                 _ => Err(WorkerError::Config(
                     "gpu acceleration requested but no supported GPU execution backend was detected"
                         .to_string(),
@@ -164,6 +177,16 @@ fn parse_acceleration_mode(value: String) -> Option<AccelerationMode> {
         "auto" => Some(AccelerationMode::Auto),
         "cpu" => Some(AccelerationMode::Cpu),
         "gpu" => Some(AccelerationMode::Gpu),
+        _ => None,
+    }
+}
+
+fn parse_runtime_bundle(value: String) -> Option<EmbeddingRuntimeBundle> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "none" => Some(EmbeddingRuntimeBundle::None),
+        "cuda12" => Some(EmbeddingRuntimeBundle::Cuda12),
+        "webgpu" => Some(EmbeddingRuntimeBundle::WebGpu),
+        "coreml" => Some(EmbeddingRuntimeBundle::CoreMl),
         _ => None,
     }
 }
