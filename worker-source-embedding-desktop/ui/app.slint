@@ -25,6 +25,7 @@ export component WorkersDashboardWindow inherits Window {
 	in-out property <int> embedding_batch_size: 1;
 
 	in property <bool> app_busy: false;
+	in property <bool> app_read_only: false;
 	in property <NoticeView> global_notice;
 	in property <SettingsCardView> settings_card;
 	in property <WorkerCardView> rss_card;
@@ -81,12 +82,13 @@ export component WorkersDashboardWindow inherits Window {
 				rss_max_requests <=> root.rss_max_requests;
 				embedding_api_key <=> root.embedding_api_key;
 				embedding_run_mode_index <=> root.embedding_run_mode_index;
-				embedding_acceleration_index <=> root.embedding_acceleration_index;
-				embedding_batch_size <=> root.embedding_batch_size;
-				app_busy: root.app_busy;
-				settings_card: root.settings_card;
-				rss_card: root.rss_card;
-				embedding_card: root.embedding_card;
+					embedding_acceleration_index <=> root.embedding_acceleration_index;
+					embedding_batch_size <=> root.embedding_batch_size;
+					app_busy: root.app_busy;
+					app_read_only: root.app_read_only;
+					settings_card: root.settings_card;
+					rss_card: root.rss_card;
+					embedding_card: root.embedding_card;
 				save_changes => { root.request_save_changes(); }
 				check_updates => { root.request_check_updates(); }
 				open_update => { root.request_open_desktop_download(); }
@@ -111,12 +113,13 @@ export component WorkersDashboardWindow inherits Window {
 				rss_max_requests <=> root.rss_max_requests;
 				embedding_api_key <=> root.embedding_api_key;
 				embedding_run_mode_index <=> root.embedding_run_mode_index;
-				embedding_acceleration_index <=> root.embedding_acceleration_index;
-				embedding_batch_size <=> root.embedding_batch_size;
-				app_busy: root.app_busy;
-				settings_card: root.settings_card;
-				rss_card: root.rss_card;
-				embedding_card: root.embedding_card;
+					embedding_acceleration_index <=> root.embedding_acceleration_index;
+					embedding_batch_size <=> root.embedding_batch_size;
+					app_busy: root.app_busy;
+					app_read_only: root.app_read_only;
+					settings_card: root.settings_card;
+					rss_card: root.rss_card;
+					embedding_card: root.embedding_card;
 				save_changes => { root.request_save_changes(); }
 				check_updates => { root.request_check_updates(); }
 				open_update => { root.request_open_desktop_download(); }
@@ -141,12 +144,13 @@ export component WorkersDashboardWindow inherits Window {
 				rss_max_requests <=> root.rss_max_requests;
 				embedding_api_key <=> root.embedding_api_key;
 				embedding_run_mode_index <=> root.embedding_run_mode_index;
-				embedding_acceleration_index <=> root.embedding_acceleration_index;
-				embedding_batch_size <=> root.embedding_batch_size;
-				app_busy: root.app_busy;
-				settings_card: root.settings_card;
-				rss_card: root.rss_card;
-				embedding_card: root.embedding_card;
+					embedding_acceleration_index <=> root.embedding_acceleration_index;
+					embedding_batch_size <=> root.embedding_batch_size;
+					app_busy: root.app_busy;
+					app_read_only: root.app_read_only;
+					settings_card: root.settings_card;
+					rss_card: root.rss_card;
+					embedding_card: root.embedding_card;
 				save_changes => { root.request_save_changes(); }
 				check_updates => { root.request_check_updates(); }
 				open_update => { root.request_open_desktop_download(); }

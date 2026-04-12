@@ -6,21 +6,21 @@ mod worker_support;
 
 use std::time::Duration;
 
-use controller::{Command, DesktopController};
+use controller::DesktopController;
 
 slint::include_modules!();
 
 fn main() -> Result<(), slint::PlatformError> {
     let window = WorkersDashboardWindow::new()?;
     let controller = DesktopController::new(&window);
-    let refresh_sender = controller.sender();
+    let refresh_ticker = controller.refresh_ticker();
     let refresh_timer = slint::Timer::default();
 
     refresh_timer.start(
         slint::TimerMode::Repeated,
         Duration::from_millis(300),
         move || {
-            let _ = refresh_sender.send(Command::RefreshTick);
+            refresh_ticker.schedule();
         },
     );
 

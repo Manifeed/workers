@@ -26,6 +26,10 @@ les deux executables metier et l'application desktop partagee.
   de lire le statut local, de voir les chemins runtime, et de piloter le worker ;
 - le mode `Manuel` lance un processus a la demande depuis l'application ou le CLI ;
 - le mode `Service utilisateur` installe un service OS qui peut continuer sans garder l'application ouverte.
+- une mise a jour ou une desinstallation est refusee tant que le worker cible est en cours d'execution ;
+- un bundle desktop n'est installe que si le manifeste fournit un `sha256` valide ;
+- si un `status.json` local est partiellement ecrit ou invalide, l'app conserve le dernier etat exploitable
+  et affiche une notice warning au lieu d'effacer le snapshot.
 
 ## Commandes utiles
 
@@ -56,3 +60,5 @@ cargo build --release -p worker-source-embedding -p worker-source-embedding-desk
 - le worker d'embeddings telecharge et met en cache les artefacts du modele au besoin ; les binaires ONNX locaux du monorepo ne sont donc pas remigres comme sources versionnees.
 - `../infra` porte les commandes transverses et la stack locale.
 - `../api` publie le contrat backend consomme par les workers.
+- le crate desktop documente sa structure et ses notes de release dans
+  `worker-source-embedding-desktop/README.md` et `worker-source-embedding-desktop/CHANGELOG.md`.

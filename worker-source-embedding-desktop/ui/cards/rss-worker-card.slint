@@ -13,29 +13,29 @@ export component RssWorkerCard inherits WorkerCardFrame {
 
 	FieldLabel { text: "API key"; }
 
-	AppLineEdit {
-		height: Theme.btn-height;
-		enabled: !root.app_busy;
-		text <=> root.api_key;
+		AppLineEdit {
+			height: Theme.btn-height;
+			enabled: !root.app_busy && !root.app_read_only;
+			text <=> root.api_key;
 		placeholder-text: "Bearer token";
 		input-type: InputType.password;
 	}
 
 	FieldLabel { text: "Run mode"; }
 
-	AppComboBox {
-		height: Theme.btn-height;
-		enabled: !root.app_busy;
-		model: ["On Demand", "Background"];
+		AppComboBox {
+			height: Theme.btn-height;
+			enabled: !root.app_busy && !root.app_read_only;
+			model: ["On Demand", "Background"];
 		current-index <=> root.run_mode_index;
 	}
 
 	FieldLabel { text: "Max concurrent requests"; }
 
-	AppSpinBox {
-		height: Theme.btn-height;
-		enabled: !root.app_busy;
-		minimum: 1;
+		AppSpinBox {
+			height: Theme.btn-height;
+			enabled: !root.app_busy && !root.app_read_only;
+			minimum: 1;
 		maximum: 256;
 		value <=> root.max_requests;
 	}

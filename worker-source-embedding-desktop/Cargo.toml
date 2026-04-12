@@ -1,13 +1,14 @@
 [package]
 name = "worker-source-embedding-desktop"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 build = "build.rs"
+readme = "README.md"
 
 [package.metadata.manifeed.release]
 family = "desktop"
-artifact_version_linux_x86_64 = "0.1.0"
-artifact_version_linux_aarch64 = "0.1.0"
+artifact_version_linux_x86_64 = "0.1.1"
+artifact_version_linux_aarch64 = "0.1.1"
 
 [[bin]]
 name = "manifeed-workers"

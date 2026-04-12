@@ -6,6 +6,15 @@ OUTPUT_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/../.." && pwd)/dist/debian
 CHANGELOG_PATH="${SCRIPT_DIR}/debian/changelog"
 BACKUP_CHANGELOG_PATH=""
 
+resolve_deb_version() {
+  if [[ -n "${MANIFEED_DESKTOP_DEB_VERSION:-}" ]]; then
+    printf '%s\n' "${MANIFEED_DESKTOP_DEB_VERSION}"
+    return
+  fi
+
+  sed -n '1s/^[^(]*(\([^)]*\)).*/\1/p' "${CHANGELOG_PATH}"
+}
+
 command -v dpkg-buildpackage >/dev/null 2>&1 || {
   printf 'dpkg-buildpackage is required to build Debian packages.\n' >&2
   exit 1
@@ -48,8 +57,17 @@ fi
   dpkg-buildpackage -us -uc -b
 )
 
+DEB_VERSION=$(resolve_deb_version)
+if [[ -z "${DEB_VERSION}" ]]; then
+  printf 'Could not resolve Debian package version from %s\n' "${CHANGELOG_PATH}" >&2
+  exit 1
+fi
+
 find "${SCRIPT_DIR}/.." -maxdepth 1 -type f \
-  \( -name 'manifeed-workers-desktop_*.deb' -o -name '*.changes' -o -name '*.buildinfo' \) \
+  \( -name "manifeed-workers-desktop_${DEB_VERSION}_*.deb" \
+    -o -name "manifeed-workers-desktop-dbgsym_${DEB_VERSION}_*.ddeb" \
+    -o -name "manifeed-workers_${DEB_VERSION}_*.changes" \
+    -o -name "manifeed-workers_${DEB_VERSION}_*.buildinfo" \) \
   -exec cp -f {} "${OUTPUT_DIR}/" \;
 
 printf 'Debian artifacts copied to %s\n' "${OUTPUT_DIR}"

@@ -15,6 +15,7 @@ export component DashboardLayoutBase inherits Rectangle {
 	in-out property <int> embedding_batch_size: 1;
 
 	in property <bool> app_busy: false;
+	in property <bool> app_read_only: false;
 	in property <SettingsCardView> settings_card;
 	in property <WorkerCardView> rss_card;
 	in property <WorkerCardView> embedding_card;

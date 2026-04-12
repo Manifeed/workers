@@ -1,6 +1,6 @@
 use manifeed_worker_common::{
-    check_worker_connection, install_user_service, save_workers_config, uninstall_user_service,
-    ReleaseCheckStatus, ServiceMode, WorkerType,
+    check_worker_connection, install_user_service, load_workers_config, save_workers_config,
+    uninstall_user_service, ReleaseCheckStatus, ServiceMode, WorkerType, WorkersConfig,
 };
 
 use crate::process::open_external_url;
@@ -23,10 +23,6 @@ impl AppCore {
     }
 
     pub(in crate::controller) fn check_updates(&mut self) {
-        self.app_busy = true;
-        self.busy_worker = None;
-        self.global_notice = Some(UiNotice::neutral_persistent("Checking for updates..."));
-
         self.refresh_release_statuses();
         self.refresh_gpu_support();
 
@@ -50,12 +46,10 @@ impl AppCore {
         } else {
             UiNotice::success("Update information refreshed.")
         });
-        self.end_action();
     }
 
     pub(in crate::controller) fn save_changes(&mut self, edits: UiEdits) {
-        self.begin_save();
-        match self.apply_edits(&edits, true) {
+        match self.commit_ui_edits(&edits) {
             Ok(()) => {
                 self.refresh_release_statuses();
                 self.refresh_gpu_support();
@@ -65,7 +59,6 @@ impl AppCore {
                 self.global_notice = Some(UiNotice::danger(error));
             }
         }
-        self.end_action();
     }
 
     pub(in crate::controller) fn test_connection(
@@ -73,11 +66,8 @@ impl AppCore {
         worker_type: WorkerType,
         edits: UiEdits,
     ) {
-        self.begin_worker_action(worker_type, "Checking API...");
-
-        if let Err(error) = self.apply_edits(&edits, true) {
+        if let Err(error) = self.commit_ui_edits(&edits) {
             self.state_mut(worker_type).notice = Some(UiNotice::danger(error));
-            self.end_action();
             return;
         }
 
@@ -91,17 +81,26 @@ impl AppCore {
             Err(error) => UiNotice::danger(connection_error_notice(&error)),
         };
         self.state_mut(worker_type).notice = Some(notice);
-        self.end_action();
     }
 
-    pub(super) fn apply_edits(
-        &mut self,
-        edits: &UiEdits,
-        sync_services: bool,
-    ) -> Result<(), String> {
-        let previous_rss_mode = service_mode(&self.config, WorkerType::RssScrapper);
-        let previous_embedding_mode = service_mode(&self.config, WorkerType::SourceEmbedding);
+    pub(super) fn commit_ui_edits(&mut self, edits: &UiEdits) -> Result<(), String> {
+        let previous = self.config.clone();
+        let updated = self.build_updated_config(edits);
+        self.persist_updated_config(updated)?;
 
+        if let Err(error) = self.sync_service_mode_changes(&previous) {
+            return self.rollback_config(previous, error);
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn commit_ui_edits_for_uninstall(&mut self, edits: &UiEdits) -> Result<(), String> {
+        let updated = self.build_updated_config(edits);
+        self.persist_updated_config(updated)
+    }
+
+    fn build_updated_config(&self, edits: &UiEdits) -> WorkersConfig {
         let mut updated = self.config.clone();
         updated.api_url = normalize_api_url(&edits.api_url);
         updated.rss.api_key = edits.rss_api_key.trim().to_string();
@@ -111,21 +110,53 @@ impl AppCore {
         updated.embedding.service_mode = edits.embedding_run_mode;
         updated.embedding.acceleration_mode = edits.embedding_acceleration_mode;
         updated.embedding.inference_batch_size = edits.embedding_batch_size.max(1);
+        updated
+    }
 
-        save_workers_config(&self.config_path, &updated).map_err(|error| {
+    fn persist_updated_config(&mut self, updated: WorkersConfig) -> Result<(), String> {
+        save_workers_config(self.config_path()?, &updated).map_err(|error| {
             format!(
                 "Could not save changes. {}",
                 summarize_detail(&error.to_string())
             )
         })?;
-
         self.config = updated;
+        Ok(())
+    }
 
-        if sync_services {
-            self.apply_service_mode_change(WorkerType::RssScrapper, previous_rss_mode)?;
-            self.apply_service_mode_change(WorkerType::SourceEmbedding, previous_embedding_mode)?;
+    fn rollback_config(
+        &mut self,
+        previous: WorkersConfig,
+        primary_error: String,
+    ) -> Result<(), String> {
+        match save_workers_config(self.config_path()?, &previous) {
+            Ok(()) => {
+                self.config = previous;
+                Err(primary_error)
+            }
+            Err(rollback_error) => {
+                if let Some(config_path) = self.config_path.clone() {
+                    if let Ok((_, reloaded)) = load_workers_config(Some(&config_path)) {
+                        self.config = reloaded;
+                    }
+                }
+                Err(format!(
+                    "{primary_error} Rollback failed. {}",
+                    summarize_detail(&rollback_error.to_string())
+                ))
+            }
         }
+    }
 
+    fn sync_service_mode_changes(&mut self, previous: &WorkersConfig) -> Result<(), String> {
+        self.apply_service_mode_change(
+            WorkerType::RssScrapper,
+            service_mode(previous, WorkerType::RssScrapper),
+        )?;
+        self.apply_service_mode_change(
+            WorkerType::SourceEmbedding,
+            service_mode(previous, WorkerType::SourceEmbedding),
+        )?;
         Ok(())
     }
 
@@ -149,12 +180,14 @@ impl AppCore {
                         worker_type.display_name()
                     ));
                 };
-                install_user_service(worker_type, &binary, &self.config_path).map_err(|error| {
-                    format!(
-                        "Could not enable background mode. {}",
-                        summarize_detail(&error.to_string())
-                    )
-                })?;
+                install_user_service(worker_type, &binary, self.config_path()?).map_err(
+                    |error| {
+                        format!(
+                            "Could not enable background mode. {}",
+                            summarize_detail(&error.to_string())
+                        )
+                    },
+                )?;
                 self.state_mut(worker_type).notice =
                     Some(UiNotice::success("Background mode is ready."));
                 Ok(())

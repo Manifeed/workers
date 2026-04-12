@@ -142,9 +142,9 @@ impl ApiClient {
                         .map(str::to_string)
                         .or_else(|| {
                             value
-                        .get("detail")
-                        .and_then(|detail| detail.as_str())
-                        .map(str::to_string)
+                                .get("detail")
+                                .and_then(|detail| detail.as_str())
+                                .map(str::to_string)
                         })
                 })
                 .unwrap_or_else(|| String::from_utf8_lossy(&bytes).to_string());

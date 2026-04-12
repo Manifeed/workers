@@ -47,7 +47,7 @@ La version de release Linux peut etre decouplee par architecture via
 ## Installation locale
 
 ```bash
-sudo apt install ./manifeed-workers-desktop_0.1.0-1_amd64.deb
+sudo apt install ./manifeed-workers-desktop_0.1.1-1_amd64.deb
 manifeed-workers
 ```
 
@@ -56,7 +56,9 @@ Depuis l'application desktop :
 - saisir `API URL` et `API key` pour chaque worker ;
 - installer ou mettre a jour `RSS` et `Embedding` independamment ;
 - les telechargements de bundles passent par le backend avec Bearer worker ;
-- activer le mode service utilisateur si souhaite.
+- activer le mode service utilisateur si souhaite ;
+- arreter un worker avant `Update` ou `Uninstall` ;
+- les bundles sont refuses si le `sha256` du manifeste est absent ou invalide.
 
 ## Layout installe
 
@@ -71,3 +73,4 @@ Depuis l'application desktop :
 - aucune suppression de `~/.config/manifeed/workers.json` ;
 - les workers ne sont plus installes dans `/usr`, uniquement dans les repertoires utilisateurs
   geres par l'application desktop.
+- une desinstallation interrompue restaure le bundle courant et la configuration locale.

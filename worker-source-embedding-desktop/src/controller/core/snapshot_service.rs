@@ -35,6 +35,7 @@ impl AppCore {
             },
             settings: self.settings_snapshot(),
             app_busy: self.app_busy,
+            app_read_only: self.is_read_only(),
             global_notice: self.global_notice.clone(),
             rss: self.worker_snapshot(WorkerType::RssScrapper, now),
             embedding: self.worker_snapshot(WorkerType::SourceEmbedding, now),
@@ -122,6 +123,8 @@ impl AppCore {
             status_tone,
             show_install_action: !installed
                 || worker_requires_update(state.release_status.as_ref()),
+            can_install_or_update: !running
+                && (!installed || worker_requires_update(state.release_status.as_ref())),
             install_label: if installed {
                 "Update".to_string()
             } else {
@@ -133,13 +136,13 @@ impl AppCore {
                 "Start".to_string()
             },
             can_toggle_run,
-            can_uninstall: installed,
-            busy: self.app_busy && self.busy_worker == Some(worker_type),
-            message: choose_notice(
+            can_uninstall: installed && !running,
+            message: choose_notices([
                 state.notice.clone(),
+                state.status_file_notice.clone(),
                 worker_status_notice(state.status_snapshot.as_ref()),
-            )
-            .or_else(|| worker_release_notice(worker_type, state.release_status.as_ref(), running)),
+                worker_release_notice(worker_type, state.release_status.as_ref(), running),
+            ]),
         }
     }
 }
@@ -165,7 +168,10 @@ fn worker_release_notice(
 ) -> Option<UiNotice> {
     let status = status?;
     match status.status {
-        ReleaseCheckStatus::UpdateAvailable if running => None,
+        ReleaseCheckStatus::UpdateAvailable if running => Some(UiNotice::warning(format!(
+            "{} has an update available. Stop it before installing the latest bundle.",
+            worker_type.display_name()
+        ))),
         ReleaseCheckStatus::UpdateAvailable => Some(UiNotice::warning(format!(
             "{} has an update available. Install the latest bundle before starting it.",
             worker_type.display_name()
@@ -178,17 +184,20 @@ fn worker_release_notice(
     }
 }
 
-fn choose_notice(primary: Option<UiNotice>, secondary: Option<UiNotice>) -> Option<UiNotice> {
-    match (primary, secondary) {
-        (Some(primary), Some(secondary)) => {
-            if secondary.priority() > primary.priority() {
-                Some(secondary)
-            } else {
-                Some(primary)
-            }
+fn choose_notices<const N: usize>(notices: [Option<UiNotice>; N]) -> Option<UiNotice> {
+    let mut selected = None;
+    for notice in notices.into_iter().flatten() {
+        let replace = selected
+            .as_ref()
+            .map(|current: &UiNotice| notice.priority() > current.priority())
+            .unwrap_or(true);
+        if replace {
+            selected = Some(notice);
         }
-        (Some(primary), None) => Some(primary),
-        (None, Some(secondary)) => Some(secondary),
-        (None, None) => None,
     }
+    selected
 }
+
+#[cfg(test)]
+#[path = "snapshot_service_tests.rs"]
+mod tests;

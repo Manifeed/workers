@@ -14,10 +14,17 @@ use crate::worker_support::{
 };
 
 use super::super::state::{UiNotice, APP_VERSION};
-use super::super::utils::{
-    predicted_gpu_support, summarize_detail, worker_is_busy, worker_requires_update,
-};
+use super::super::utils::{predicted_gpu_support, summarize_detail};
 use super::AppCore;
+
+enum StatusLoadResult {
+    Missing,
+    Loaded(WorkerStatusSnapshot),
+    Error {
+        prefix: &'static str,
+        detail: String,
+    },
+}
 
 impl AppCore {
     pub(in crate::controller) fn refresh(&mut self) {
@@ -26,9 +33,6 @@ impl AppCore {
             self.refresh_status(worker_type);
         }
         self.clear_expired_notices();
-        for worker_type in ALL_WORKERS {
-            self.reconcile_outdated_worker(worker_type);
-        }
     }
 
     pub(in crate::controller) fn refresh_release_statuses(&mut self) {
@@ -37,15 +41,21 @@ impl AppCore {
             let status = self.compute_release_status(worker_type);
             self.state_mut(worker_type).release_status = status;
         }
-        for worker_type in ALL_WORKERS {
-            self.reconcile_outdated_worker(worker_type);
-        }
     }
 
     pub(in crate::controller) fn refresh_gpu_support(&mut self) {
+        if self.is_read_only() {
+            self.gpu_support = Some(predicted_gpu_support(&self.config));
+            return;
+        }
+
         self.gpu_support = self
             .binary_path(WorkerType::SourceEmbedding)
-            .map(|binary| GpuSupport::probe(&binary, &self.config_path))
+            .and_then(|binary| {
+                self.config_path
+                    .as_deref()
+                    .map(|config_path| GpuSupport::probe(&binary, config_path))
+            })
             .or_else(|| Some(predicted_gpu_support(&self.config)));
     }
 
@@ -90,40 +100,22 @@ impl AppCore {
             Err(_) => return,
         };
 
-        let snapshot = match fs::read(&status_file) {
-            Ok(bytes) => serde_json::from_slice::<WorkerStatusSnapshot>(&bytes).ok(),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-            Err(_) => None,
+        let result = match fs::read(&status_file) {
+            Ok(bytes) => match serde_json::from_slice::<WorkerStatusSnapshot>(&bytes) {
+                Ok(snapshot) => StatusLoadResult::Loaded(snapshot),
+                Err(error) => StatusLoadResult::Error {
+                    prefix: "Worker status file is invalid.",
+                    detail: error.to_string(),
+                },
+            },
+            Err(error) if error.kind() == io::ErrorKind::NotFound => StatusLoadResult::Missing,
+            Err(error) => StatusLoadResult::Error {
+                prefix: "Worker status file is unavailable.",
+                detail: error.to_string(),
+            },
         };
 
-        let now = Instant::now();
-        let state = self.state_mut(worker_type);
-        let observed_processing = snapshot
-            .as_ref()
-            .map(|snapshot| {
-                matches!(snapshot.phase, WorkerPhase::Processing) || snapshot.current_task.is_some()
-            })
-            .unwrap_or(false);
-        let observed_completed_work = match (state.status_snapshot.as_ref(), snapshot.as_ref()) {
-            (Some(previous), Some(current)) => {
-                current.completed_task_count > previous.completed_task_count
-            }
-            _ => false,
-        };
-
-        if observed_processing || observed_completed_work {
-            state.note_processing_activity(now);
-        }
-
-        if snapshot
-            .as_ref()
-            .map(|snapshot| matches!(snapshot.phase, WorkerPhase::Error | WorkerPhase::Stopped))
-            .unwrap_or(false)
-        {
-            state.clear_processing_hint();
-        }
-
-        state.status_snapshot = snapshot;
+        apply_status_load_result(self.state_mut(worker_type), result, Instant::now());
     }
 
     fn poll_child(&mut self, worker_type: WorkerType) {
@@ -134,14 +126,12 @@ impl AppCore {
 
         match child.try_wait() {
             Ok(Some(status)) => {
-                state.notice = Some(super::super::state::UiNotice::neutral(format!(
-                    "Worker stopped ({status})."
-                )));
+                state.notice = Some(UiNotice::neutral(format!("Worker stopped ({status}).")));
                 state.child = None;
             }
             Ok(None) => {}
             Err(error) => {
-                state.notice = Some(super::super::state::UiNotice::warning(format!(
+                state.notice = Some(UiNotice::warning(format!(
                     "Worker status is unavailable. {}",
                     summarize_detail(&error.to_string())
                 )));
@@ -173,39 +163,48 @@ impl AppCore {
             }
         }
     }
+}
 
-    fn reconcile_outdated_worker(&mut self, worker_type: WorkerType) {
-        let requires_update =
-            worker_requires_update(self.state(worker_type).release_status.as_ref());
-        if !requires_update {
-            self.state_mut(worker_type).awaiting_update_stop = false;
-            return;
+fn apply_status_load_result(
+    state: &mut super::super::state::WorkerRuntimeState,
+    result: StatusLoadResult,
+    now: Instant,
+) {
+    match result {
+        StatusLoadResult::Missing => {
+            state.status_file_notice = None;
+            state.status_snapshot = None;
         }
+        StatusLoadResult::Loaded(snapshot) => {
+            state.status_file_notice = None;
 
-        if !self.is_running(worker_type) {
-            self.state_mut(worker_type).awaiting_update_stop = false;
-            return;
+            let observed_processing = matches!(snapshot.phase, WorkerPhase::Processing)
+                || snapshot.current_task.is_some();
+            let observed_completed_work = state
+                .status_snapshot
+                .as_ref()
+                .map(|previous| snapshot.completed_task_count > previous.completed_task_count)
+                .unwrap_or(false);
+
+            if observed_processing || observed_completed_work {
+                state.note_processing_activity(now);
+            }
+
+            if matches!(snapshot.phase, WorkerPhase::Error | WorkerPhase::Stopped) {
+                state.clear_processing_hint();
+            }
+
+            state.status_snapshot = Some(snapshot);
         }
-
-        if worker_is_busy(self.state(worker_type).status_snapshot.as_ref()) {
-            let worker_name = worker_type.display_name();
-            let state = self.state_mut(worker_type);
-            state.awaiting_update_stop = true;
-            state.notice = Some(UiNotice::warning(format!(
-                "{worker_name} has an update available. Current work will finish before the worker stops."
+        StatusLoadResult::Error { prefix, detail } => {
+            state.status_file_notice = Some(UiNotice::warning(format!(
+                "{prefix} {}",
+                summarize_detail(&detail)
             )));
-            return;
         }
-
-        let stop_result = self.stop_worker(worker_type);
-        let worker_name = worker_type.display_name();
-        let state = self.state_mut(worker_type);
-        state.awaiting_update_stop = false;
-        state.notice = Some(match stop_result {
-            Ok(()) => UiNotice::warning(format!(
-                "{worker_name} stopped because a newer bundle is available. Install the update before restarting."
-            )),
-            Err(error) => UiNotice::danger(error),
-        });
     }
 }
+
+#[cfg(test)]
+#[path = "refresh_service_tests.rs"]
+mod tests;

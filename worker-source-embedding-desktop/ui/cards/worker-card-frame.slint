@@ -9,6 +9,7 @@ export component WorkerCardFrame inherits CardShell {
 	in property <string> title;
 	in property <WorkerCardView> card;
 	in property <bool> app_busy;
+	in property <bool> app_read_only;
 	callback check_api;
 	callback install_or_update;
 	callback toggle_run;
@@ -39,20 +40,6 @@ export component WorkerCardFrame inherits CardShell {
 					label: root.card.status_label;
 					tone: root.card.status_tone;
 				}
-
-				Rectangle {
-					horizontal-stretch: 1;
-					background: transparent;
-				}
-
-				Text {
-					visible: root.card.busy;
-					text: "Working";
-					color: Theme.busy-text;
-					font-family: Theme.font-body;
-					font-size: Theme.fs-label;
-					font-weight: Theme.fw-semibold;
-				}
 			}
 
 			Text {
@@ -67,33 +54,33 @@ export component WorkerCardFrame inherits CardShell {
 		VerticalLayout {
 			spacing: Theme.sp-md;
 
-			EditorialButton {
-				primary: true;
-				text: root.card.run_label;
-				enabled: !root.app_busy && root.card.can_toggle_run;
-				pressed => { root.toggle_run(); }
-			}
+				EditorialButton {
+					primary: true;
+					text: root.card.run_label;
+					enabled: !root.app_busy && !root.app_read_only && root.card.can_toggle_run;
+					pressed => { root.toggle_run(); }
+				}
 
 			HorizontalLayout {
 				spacing: Theme.sp-md;
 
-				EditorialButton {
-					text: "Check API";
-					enabled: !root.app_busy;
-					pressed => { root.check_api(); }
-				}
+					EditorialButton {
+						text: "Check API";
+						enabled: !root.app_busy && !root.app_read_only;
+						pressed => { root.check_api(); }
+					}
 
-				if root.card.show_install_action : EditorialButton {
-					text: root.card.install_label;
-					enabled: !root.app_busy;
-					pressed => { root.install_or_update(); }
-				}
+					if root.card.show_install_action : EditorialButton {
+						text: root.card.install_label;
+						enabled: !root.app_busy && !root.app_read_only && root.card.can_install_or_update;
+						pressed => { root.install_or_update(); }
+					}
 
-				EditorialButton {
-					text: "Uninstall";
-					enabled: !root.app_busy && root.card.can_uninstall;
-					pressed => { root.uninstall(); }
-				}
+					EditorialButton {
+						text: "Uninstall";
+						enabled: !root.app_busy && !root.app_read_only && root.card.can_uninstall;
+						pressed => { root.uninstall(); }
+					}
 			}
 		}
 

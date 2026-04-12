@@ -76,7 +76,6 @@ pub struct EmbeddingWorkerSettings {
 pub struct WorkersConfig {
     pub schema_version: u32,
     pub api_url: String,
-    pub desktop_installed_version: String,
     pub rss: RssWorkerSettings,
     pub embedding: EmbeddingWorkerSettings,
 }
@@ -113,7 +112,6 @@ impl Default for WorkersConfig {
         Self {
             schema_version: WORKERS_CONFIG_SCHEMA_VERSION,
             api_url: DEFAULT_API_URL.to_string(),
-            desktop_installed_version: String::new(),
             rss: RssWorkerSettings::default(),
             embedding: EmbeddingWorkerSettings::default(),
         }

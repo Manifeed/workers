@@ -27,6 +27,9 @@ Pour publier uniquement la famille desktop dans le storage backend et mettre a j
 Le desktop reste telechargeable publiquement depuis le backend. Les bundles workers RSS et
 Embedding restent proteges par API key worker.
 
+Dans l'application desktop, `Update` et `Uninstall` restent bloques tant que le worker cible
+tourne, et les bundles ne sont acceptes que si leur `sha256` est valide.
+
 Tant qu'aucun build macOS n'est publie, aucune entree macOS n'a besoin d'etre presente dans le
 catalogue de release local.
 

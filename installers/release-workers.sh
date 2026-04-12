@@ -137,13 +137,15 @@ copy_file() {
   cp -f "${source}" "${destination}"
 }
 
-latest_matching_file() {
+find_linux_desktop_package() {
   local directory=$1
-  local pattern=$2
-  find "${directory}" -maxdepth 1 -type f -name "${pattern}" -printf '%T@ %p\n' 2>/dev/null \
-    | sort -nr \
-    | head -n 1 \
-    | cut -d' ' -f2-
+  local version=$2
+  local deb_arch=$3
+  find "${directory}" -maxdepth 1 -type f \
+    -name "manifeed-workers-desktop_${version}-*_${deb_arch}.deb" \
+    -printf '%p\n' 2>/dev/null \
+    | sort -V \
+    | tail -n 1
 }
 
 write_bundle_manifest() {
@@ -313,7 +315,7 @@ append_catalog_metadata() {
 publish_linux_desktop() {
   local desktop_version=$1
   local dist_dir="${WORKERS_DIR}/dist/debian"
-  local source basename arch storage_relative_path destination
+  local source basename arch deb_arch storage_relative_path destination
 
   if [[ ${SKIP_BUILD} -eq 0 ]]; then
     MANIFEED_DESKTOP_APP_VERSION="${desktop_version}" \
@@ -321,21 +323,16 @@ publish_linux_desktop() {
       bash "${WORKERS_DIR}/installers/debian/build-debs.sh"
   fi
 
-  source=$(latest_matching_file "${dist_dir}" "manifeed-workers-desktop_*_*.deb")
+  deb_arch=$(current_deb_arch)
+  source=$(find_linux_desktop_package "${dist_dir}" "${desktop_version}" "${deb_arch}")
   if [[ -z "${source}" ]]; then
-    printf 'No Linux desktop .deb found under %s\n' "${dist_dir}" >&2
+    printf 'No Linux desktop .deb found for version %s and arch %s under %s\n' \
+      "${desktop_version}" "${deb_arch}" "${dist_dir}" >&2
     exit 1
   fi
 
   basename=$(basename "${source}")
-  case "${basename##*_}" in
-    amd64.deb) arch="x86_64" ;;
-    arm64.deb) arch="aarch64" ;;
-    *)
-      printf 'Unsupported Debian desktop package name: %s\n' "${basename}" >&2
-      exit 1
-      ;;
-  esac
+  arch=$(current_release_arch)
 
   storage_relative_path="desktop/${basename}"
   destination="${STORAGE_ROOT}/${storage_relative_path}"
@@ -535,6 +532,7 @@ update_catalog() {
   python3 - "${metadata_path}" "${catalog_path}" "${download_base_url}" "${release_notes_base_url}" "${published_at}" <<'PY'
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -548,6 +546,8 @@ if catalog_path.exists():
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
 else:
     catalog = {"items": []}
+
+version_pattern = re.compile(r"(\d+\.\d+\.\d+)")
 
 new_items = []
 for raw_line in metadata_path.read_text(encoding="utf-8").splitlines():
@@ -590,29 +590,37 @@ for raw_line in metadata_path.read_text(encoding="utf-8").splitlines():
         item["runtime_bundle"] = runtime_bundle
     new_items.append(item)
 
-keys_to_replace = {
-    (
-        item["family"],
-        item["product"],
-        item["platform"],
-        item["arch"],
+def release_identity(item: dict) -> tuple:
+    return (
+        item.get("family"),
+        item.get("product"),
+        item.get("platform"),
+        item.get("arch"),
         item.get("runtime_bundle"),
+        item.get("artifact_name")
+        or item.get("storage_relative_path")
+        or item.get("download_url"),
     )
-    for item in new_items
-}
+
+
+def normalize_preserved_item(item: dict) -> dict:
+    artifact_name = item.get("artifact_name") or ""
+    match = version_pattern.search(artifact_name)
+    if match is None:
+        return item
+
+    normalized = dict(item)
+    normalized["latest_version"] = match.group(1)
+    normalized["minimum_supported_version"] = match.group(1)
+    return normalized
+
+new_identities = {release_identity(item) for item in new_items}
 
 preserved_items = []
 for item in catalog.get("items", []):
-    key = (
-        item.get("family"),
-        item["product"],
-        item["platform"],
-        item["arch"],
-        item.get("runtime_bundle"),
-    )
-    if key in keys_to_replace:
+    if release_identity(item) in new_identities:
         continue
-    preserved_items.append(item)
+    preserved_items.append(normalize_preserved_item(item))
 
 catalog["items"] = preserved_items + new_items
 catalog["items"].sort(
@@ -622,6 +630,8 @@ catalog["items"].sort(
         item["product"],
         item["arch"],
         item.get("runtime_bundle") or "",
+        item.get("latest_version", ""),
+        item.get("artifact_name", ""),
     )
 )
 catalog_path.parent.mkdir(parents=True, exist_ok=True)
