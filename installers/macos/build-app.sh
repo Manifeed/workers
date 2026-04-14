@@ -8,25 +8,17 @@ APP_DIR="${DIST_DIR}/Manifeed Workers.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
+MANIFEST_HELPER="${WORKERS_DIR}/installers/release/read_manifest_value.py"
 
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
 APP_VERSION="${MANIFEED_DESKTOP_APP_VERSION:-}"
 if [[ -z "${APP_VERSION}" ]]; then
-APP_VERSION=$(python3 - "${WORKERS_DIR}/worker-source-embedding-desktop/Cargo.toml" <<'PY'
-import tomllib
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-data = tomllib.loads(path.read_text(encoding="utf-8"))
-print(data["package"]["version"])
-PY
-)
+  APP_VERSION=$(python3 "${MANIFEST_HELPER}" "${WORKERS_DIR}/worker-desktop/Cargo.toml" "package.version")
 fi
 
 MANIFEED_DESKTOP_APP_VERSION="${APP_VERSION}" \
-  cargo build --release -p worker-source-embedding-desktop --manifest-path "${WORKERS_DIR}/Cargo.toml"
+  cargo build --release -p worker-desktop --manifest-path "${WORKERS_DIR}/Cargo.toml"
 
 install -m 0755 \
   "${WORKERS_DIR}/target/release/manifeed-workers" \

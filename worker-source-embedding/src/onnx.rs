@@ -223,9 +223,9 @@ fn encode_batch(
         let type_ids = encoding.get_type_ids();
         let effective_length = ids.len().min(sequence_length);
 
-        for column_index in 0..effective_length {
+        for (column_index, id) in ids.iter().enumerate().take(effective_length) {
             let offset = row_index * sequence_length + column_index;
-            input_ids[offset] = i64::from(ids[column_index]);
+            input_ids[offset] = i64::from(*id);
             attention_mask[offset] = i64::from(mask.get(column_index).copied().unwrap_or(1));
             token_type_ids[offset] = i64::from(type_ids.get(column_index).copied().unwrap_or(0));
         }

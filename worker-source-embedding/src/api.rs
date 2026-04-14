@@ -4,7 +4,11 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use manifeed_worker_common::{ApiClient, WorkerAuthenticator, WorkerStatusHandle};
+use manifeed_worker_common::{
+    canonical_json, derive_hmac_secret, new_nonce, sign_payload, utc_timestamp_now, ApiClient,
+    CanonicalJsonMode, WorkerAuthenticator, WorkerLeaseRead, WorkerSessionOpenRead,
+    WorkerSessionOpenRequest, WorkerStatusHandle, WorkerTaskClaimRequest,
+};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::time::sleep;
@@ -12,11 +16,7 @@ use tracing::warn;
 
 use crate::config::EmbeddingWorkerConfig;
 use crate::error::{EmbeddingWorkerError, Result};
-use crate::gateway::{
-    build_embedding_task_result_payload, canonical_json, derive_hmac_secret, new_nonce,
-    sign_payload, utc_timestamp_now, WorkerLeaseRead, WorkerSessionOpenRead,
-    WorkerSessionOpenRequest, WorkerTaskClaimRequest,
-};
+use crate::gateway::build_embedding_task_result_payload;
 use crate::worker::{
     ClaimedEmbeddingTask, EmbeddingGateway, EmbeddingResultSource, EmbeddingSourceInput,
 };
@@ -109,7 +109,7 @@ impl HttpEmbeddingGateway {
         let leases = self
             .api_client
             .post_json::<_, Vec<WorkerLeaseRead>>(
-                "/workers/tasks/claim",
+                "/workers/api/tasks/claim",
                 &WorkerTaskClaimRequest {
                     session_id: session.session_id.clone(),
                     task_type: self.task_type.clone(),
@@ -183,25 +183,32 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "trace_id": metadata.trace_id,
             "worker_version": request_worker_version.or(metadata.worker_version.clone()),
         });
-        let signature = sign_payload(&self.hmac_secret, &signature_payload)?;
-        let request_body = canonical_json(&json!({
-            "session_id": metadata.session_id.clone(),
-            "lease_id": metadata.lease_id.clone(),
-            "trace_id": metadata.trace_id.clone(),
-            "task_type": metadata.task_type.clone(),
-            "worker_version": Some(worker_version),
-            "signed_at": signed_at,
-            "nonce": nonce,
-            "signature": signature,
-            "result_payload": signature_payload["result_payload"].clone(),
-        }))?
+        let signature = sign_payload(
+            &self.hmac_secret,
+            &signature_payload,
+            CanonicalJsonMode::NormalizeExponentSign,
+        )?;
+        let request_body = canonical_json(
+            &json!({
+                "session_id": metadata.session_id.clone(),
+                "lease_id": metadata.lease_id.clone(),
+                "trace_id": metadata.trace_id.clone(),
+                "task_type": metadata.task_type.clone(),
+                "worker_version": Some(worker_version),
+                "signed_at": signed_at,
+                "nonce": nonce,
+                "signature": signature,
+                "result_payload": signature_payload["result_payload"].clone(),
+            }),
+            CanonicalJsonMode::NormalizeExponentSign,
+        )?
         .into_bytes();
 
         loop {
             match self
                 .api_client
                 .post_json_bytes::<serde_json::Value>(
-                    "/workers/tasks/complete",
+                    "/workers/api/tasks/complete",
                     request_body.clone(),
                     Some(self.bearer_token()),
                 )
@@ -258,25 +265,32 @@ impl EmbeddingGateway for HttpEmbeddingGateway {
             "trace_id": metadata.trace_id,
             "worker_version": request_worker_version.or(metadata.worker_version.clone()),
         });
-        let signature = sign_payload(&self.hmac_secret, &signature_payload)?;
-        let request_body = canonical_json(&json!({
-            "session_id": metadata.session_id.clone(),
-            "lease_id": metadata.lease_id.clone(),
-            "trace_id": metadata.trace_id.clone(),
-            "task_type": metadata.task_type.clone(),
-            "worker_version": Some(worker_version),
-            "signed_at": signed_at,
-            "nonce": nonce,
-            "signature": signature,
-            "error_message": signature_payload["error_message"].clone(),
-        }))?
+        let signature = sign_payload(
+            &self.hmac_secret,
+            &signature_payload,
+            CanonicalJsonMode::NormalizeExponentSign,
+        )?;
+        let request_body = canonical_json(
+            &json!({
+                "session_id": metadata.session_id.clone(),
+                "lease_id": metadata.lease_id.clone(),
+                "trace_id": metadata.trace_id.clone(),
+                "task_type": metadata.task_type.clone(),
+                "worker_version": Some(worker_version),
+                "signed_at": signed_at,
+                "nonce": nonce,
+                "signature": signature,
+                "error_message": signature_payload["error_message"].clone(),
+            }),
+            CanonicalJsonMode::NormalizeExponentSign,
+        )?
         .into_bytes();
 
         loop {
             match self
                 .api_client
                 .post_json_bytes::<serde_json::Value>(
-                    "/workers/tasks/fail",
+                    "/workers/api/tasks/fail",
                     request_body.clone(),
                     Some(self.bearer_token()),
                 )
@@ -315,7 +329,7 @@ impl HttpEmbeddingGateway {
         let session = self
             .api_client
             .post_json::<_, WorkerSessionOpenRead>(
-                "/workers/sessions/open",
+                "/workers/api/sessions/open",
                 &WorkerSessionOpenRequest {
                     task_type: self.task_type.clone(),
                     worker_version: Some(self.worker_version.clone()),

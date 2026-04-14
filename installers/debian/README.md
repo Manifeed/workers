@@ -42,12 +42,12 @@ Le script publie dans `../../backend/var/worker-releases/desktop/` et met a jour
 
 La version de release Linux peut etre decouplee par architecture via
 `artifact_version_linux_x86_64` et `artifact_version_linux_aarch64` dans
-`worker-source-embedding-desktop/Cargo.toml`.
+`worker-desktop/Cargo.toml`.
 
 ## Installation locale
 
 ```bash
-sudo apt install ./manifeed-workers-desktop_0.1.1-1_amd64.deb
+sudo apt install ./manifeed-workers-desktop_<version>-1_amd64.deb
 manifeed-workers
 ```
 

@@ -1,32 +1,28 @@
 [package]
 name = "worker-rss"
-version = "0.1.0"
+version = "0.1.3"
 edition = "2021"
 
 [package.metadata.manifeed.release]
 family = "rss"
-worker_version = "0.1.0"
-artifact_version_linux_x86_64 = "0.1.0"
-artifact_version_linux_aarch64 = "0.1.0"
+worker_version = "0.1.3"
+artifact_version_linux_x86_64 = "0.1.3"
+artifact_version_linux_aarch64 = "0.1.3"
 
 [dependencies]
-async-trait = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4.5", features = ["derive"] }
-feed-rs = "2"
-hmac = "0.12"
-hex = "0.4"
-html-escape = "0.2"
-httpdate = "1"
+async-trait.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive"] }
+feed-rs.workspace = true
+html-escape.workspace = true
+httpdate.workspace = true
 manifeed-worker-common = { path = "../manifeed-worker-common" }
-reqwest = { version = "0.12", default-features = false, features = ["brotli", "deflate", "gzip", "json", "rustls-tls"] }
-regex = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.10"
-thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt"] }
-unicode-normalization = "0.1"
-uuid = { version = "1", features = ["v4"] }
+reqwest = { workspace = true, features = ["brotli", "deflate", "gzip", "json", "rustls-tls"] }
+regex.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+unicode-normalization.workspace = true

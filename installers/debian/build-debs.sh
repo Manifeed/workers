@@ -5,6 +5,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUTPUT_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/../.." && pwd)/dist/debian
 CHANGELOG_PATH="${SCRIPT_DIR}/debian/changelog"
 BACKUP_CHANGELOG_PATH=""
+WORKSPACE_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/../.." && pwd)
+MANIFEST_HELPER="${WORKSPACE_DIR}/installers/release/read_manifest_value.py"
 
 resolve_deb_version() {
   if [[ -n "${MANIFEED_DESKTOP_DEB_VERSION:-}" ]]; then
@@ -13,6 +15,10 @@ resolve_deb_version() {
   fi
 
   sed -n '1s/^[^(]*(\([^)]*\)).*/\1/p' "${CHANGELOG_PATH}"
+}
+
+resolve_desktop_app_version() {
+  python3 "${MANIFEST_HELPER}" "${WORKSPACE_DIR}/worker-desktop/Cargo.toml" "package.version"
 }
 
 command -v dpkg-buildpackage >/dev/null 2>&1 || {
@@ -48,9 +54,10 @@ manifeed-workers (${MANIFEED_DESKTOP_DEB_VERSION}) unstable; urgency=medium
 EOF
 fi
 
-if [[ -n "${MANIFEED_DESKTOP_APP_VERSION:-}" ]]; then
-  export MANIFEED_DESKTOP_APP_VERSION
+if [[ -z "${MANIFEED_DESKTOP_APP_VERSION:-}" ]]; then
+  MANIFEED_DESKTOP_APP_VERSION=$(resolve_desktop_app_version)
 fi
+export MANIFEED_DESKTOP_APP_VERSION
 
 (
   cd "${SCRIPT_DIR}"

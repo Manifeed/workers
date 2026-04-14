@@ -8,7 +8,7 @@ WORKSPACE_DIR := $(abspath $(CURDIR)/../..)
 	dh $@
 
 override_dh_auto_build:
-	cd $(WORKSPACE_DIR) && cargo build --release -p worker-source-embedding-desktop
+	cd $(WORKSPACE_DIR) && cargo build --release -p worker-desktop
 
 override_dh_auto_install:
 	bash ./scripts/stage-packages.sh "$(CURDIR)" "$(DEB_HOST_ARCH)"
@@ -16,9 +16,4 @@ override_dh_auto_install:
 override_dh_auto_test:
 
 override_dh_auto_clean:
-	rm -rf $(CURDIR)/debian/manifeed-workers \
-		$(CURDIR)/debian/manifeed-workers-desktop \
-		$(CURDIR)/debian/manifeed-worker-rss \
-		$(CURDIR)/debian/manifeed-worker-embedding \
-		$(CURDIR)/debian/manifeed-worker-embedding-runtime-cpu \
-		$(CURDIR)/debian/manifeed-worker-embedding-runtime-cuda12
+	rm -rf $(CURDIR)/debian/manifeed-workers-desktop

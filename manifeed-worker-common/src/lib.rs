@@ -4,6 +4,7 @@ pub mod config;
 pub mod diagnostics;
 pub mod error;
 pub mod paths;
+pub mod protocol;
 pub mod release;
 pub mod service;
 pub mod status;
@@ -31,6 +32,11 @@ pub use paths::{
     installed_embedding_runtime_library_path, installed_worker_binary_path, AppPaths,
     WorkerRuntimePaths,
 };
+pub use protocol::{
+    canonical_json, derive_hmac_secret, new_nonce, sign_payload, utc_timestamp_now,
+    CanonicalJsonMode, WorkerLeaseRead, WorkerSessionOpenRead, WorkerSessionOpenRequest,
+    WorkerTaskClaimRequest, WorkerTaskCompleteRequest, WorkerTaskFailRequest,
+};
 pub use release::{
     check_worker_release_status, check_worker_release_status_with_runtime, resolve_release_arch,
     resolve_release_platform, ReleaseCheckStatus, WorkerReleaseManifest, WorkerReleaseStatus,
@@ -42,4 +48,4 @@ pub use status::{
     CurrentTaskSnapshot, NetworkTotalsSnapshot, ServerConnectionState, WorkerPhase,
     WorkerStatusHandle, WorkerStatusInit, WorkerStatusSnapshot,
 };
-pub use types::{WorkerTaskClaim, WorkerTaskClaimRequest, WorkerTaskCommand, WorkerType};
+pub use types::{WorkerTaskClaim, WorkerTaskCommand, WorkerType};

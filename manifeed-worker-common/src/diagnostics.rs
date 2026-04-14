@@ -24,7 +24,10 @@ struct WorkerPingRead {
 
 pub fn check_worker_connection(api_url: &str, api_key: &str) -> Result<WorkerConnectionCheck> {
     let response = Client::new()
-        .get(format!("{}/workers/ping", api_url.trim_end_matches('/')))
+        .get(format!(
+            "{}/workers/api/ping",
+            api_url.trim_end_matches('/')
+        ))
         .bearer_auth(api_key)
         .send()?;
     let status = response.status();

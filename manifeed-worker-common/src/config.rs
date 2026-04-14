@@ -8,7 +8,7 @@ use crate::paths::app_paths;
 use crate::types::WorkerType;
 
 pub const WORKERS_CONFIG_SCHEMA_VERSION: u32 = 4;
-pub const DEFAULT_API_URL: &str = "http://127.0.0.1:8000";
+pub const DEFAULT_API_URL: &str = "http://127.0.0.1";
 
 pub const DEFAULT_RSS_POLL_SECONDS: u64 = 60;
 pub const DEFAULT_RSS_LEASE_SECONDS: u32 = 300;

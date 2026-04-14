@@ -3,6 +3,37 @@ members = [
   "manifeed-worker-common",
   "worker-rss",
   "worker-source-embedding",
-  "worker-source-embedding-desktop",
+  "worker-desktop",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+async-trait = "0.1"
+base64 = "0.22"
+chrono = "0.4"
+clap = "4.5"
+directories = "5"
+ed25519-dalek = "2.1"
+feed-rs = "2"
+hex = "0.4"
+hmac = "0.12"
+hostname = "0.4"
+html-escape = "0.2"
+httpdate = "1"
+ort = { version = "2.0.0-rc.12", default-features = false }
+rand_core = "0.6"
+regex = "1"
+reqwest = { version = "0.12", default-features = false }
+semver = "1"
+serde = "1"
+serde_json = "1"
+sha2 = "0.10"
+slint = { version = "1.15", default-features = false }
+slint-build = "1.15"
+thiserror = "2"
+tokenizers = { version = "0.20", default-features = false }
+tokio = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+unicode-normalization = "0.1"
+uuid = "1"

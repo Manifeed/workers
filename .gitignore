@@ -10,5 +10,6 @@ installers/*.changes
 installers/*.buildinfo
 installers/debian/debian/*.substvars
 installers/debian/debian/files
+installers/debian/debian/.debhelper/
 installers/debian/debian/debhelper-build-stamp
 installers/debian/debian/manifeed-workers-desktop/

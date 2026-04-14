@@ -145,7 +145,7 @@ fn fetch_manifest(
 
     let response = Client::new()
         .get(format!(
-            "{}/workers/releases/manifest",
+            "{}/workers/api/releases/manifest",
             api_url.trim_end_matches('/')
         ))
         .query(&query)

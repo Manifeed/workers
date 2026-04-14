@@ -8,8 +8,8 @@ les deux executables metier et l'application desktop partagee.
 - `manifeed-worker-common/` : config persistante, status files, version check, services utilisateur, auth et client backend partages
 - `worker-rss/` : worker RSS natif
 - `worker-source-embedding/` : worker d'embeddings
-- `worker-source-embedding-desktop/` : application desktop partagee `Manifeed Workers`
-- `installers/` : packaging Debian/Ubuntu, packaging macOS et script de release des bundles workers
+- `worker-desktop/` : application desktop partagee `Manifeed Workers`
+- `installers/` : packaging Debian/Ubuntu, packaging macOS et outillage de release modulaire (`release/`, `release-workers.sh`)
 
 ## Experience utilisateur actuelle
 
@@ -37,7 +37,7 @@ les deux executables metier et l'application desktop partagee.
 cargo test -p worker-rss
 cargo test -p worker-source-embedding
 cargo build --release -p worker-rss
-cargo build --release -p worker-source-embedding -p worker-source-embedding-desktop
+cargo build --release -p worker-source-embedding -p worker-desktop
 ./installers/release-workers.sh --family desktop
 ./installers/release-workers.sh --family rss
 ./installers/release-workers.sh --family embedding
@@ -49,16 +49,17 @@ cargo build --release -p worker-source-embedding -p worker-source-embedding-desk
 
 - `dist/` est un artefact genere localement et n'est plus versionne.
 - `installers/release-workers.sh` publie dans `../backend/var/worker-releases/` et maintient `catalog.json`.
+- `installers/release/` centralise les helpers manifests/catalogue et les familles `desktop`, `rss`, `embedding`.
 - chaque architecture peut maintenant porter un `latest_version` distinct via les metadata `artifact_version_<platform>_<arch>` dans les `Cargo.toml`, sans changer le `worker_version` backend.
 - la configuration nominale des workers est persistante dans `workers.json`, mais les URLs backend et plusieurs timings critiques sont maintenant figes dans les binaires.
 - l'app desktop partagee lit les status files locaux RSS/embedding et pilote les deux workers avec deux pages distinctes `Scraping` et `Embedding`.
 - le paquet Debian installe uniquement l'app desktop dans `/usr/lib/manifeed/desktop` avec un wrapper `/usr/bin/manifeed-workers`.
 - les bundles workers sont extraits dans `~/.local/share/manifeed/<worker>/current`.
 - les families `desktop`, `rss` et `embedding` sont publiees independamment ; une release n'ecrase pas les autres familles.
-- les bundles, paquets et CLI verifient leur version via le catalogue backend expose par `/workers/releases/manifest`.
+- les bundles, paquets et CLI verifient leur version via le catalogue backend expose par `/workers/api/releases/manifest`.
 - le desktop se telecharge publiquement ; les bundles RSS et Embedding exigent une API key worker valide.
 - le worker d'embeddings telecharge et met en cache les artefacts du modele au besoin ; les binaires ONNX locaux du monorepo ne sont donc pas remigres comme sources versionnees.
 - `../infra` porte les commandes transverses et la stack locale.
 - `../api` publie le contrat backend consomme par les workers.
 - le crate desktop documente sa structure et ses notes de release dans
-  `worker-source-embedding-desktop/README.md` et `worker-source-embedding-desktop/CHANGELOG.md`.
+  `worker-desktop/README.md` et `worker-desktop/CHANGELOG.md`.

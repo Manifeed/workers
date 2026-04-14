@@ -5,7 +5,10 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use manifeed_worker_common::{
-    ApiClient, CurrentTaskSnapshot, WorkerAuthenticator, WorkerError, WorkerStatusHandle,
+    derive_hmac_secret, new_nonce, sign_payload, utc_timestamp_now, ApiClient, CanonicalJsonMode,
+    CurrentTaskSnapshot, WorkerAuthenticator, WorkerError, WorkerLeaseRead, WorkerSessionOpenRead,
+    WorkerSessionOpenRequest, WorkerStatusHandle, WorkerTaskClaimRequest,
+    WorkerTaskCompleteRequest, WorkerTaskFailRequest,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -14,11 +17,7 @@ use tracing::warn;
 
 use crate::config::RssWorkerConfig;
 use crate::error::{Result, RssWorkerError};
-use crate::gateway::{
-    build_rss_task_result_payload, derive_hmac_secret, new_nonce, sign_payload, utc_timestamp_now,
-    WorkerLeaseRead, WorkerSessionOpenRead, WorkerSessionOpenRequest, WorkerTaskClaimRequest,
-    WorkerTaskCompleteRequest, WorkerTaskFailRequest,
-};
+use crate::gateway::build_rss_task_result_payload;
 use crate::model::{ClaimedRssTask, RawFeedScrapeResult, RssFeedPayload};
 use crate::worker::{RssGateway, RssGatewayState};
 
@@ -114,7 +113,7 @@ impl HttpRssGateway {
         let leases = self
             .api_client
             .post_json::<_, Vec<WorkerLeaseRead>>(
-                "/workers/tasks/claim",
+                "/workers/api/tasks/claim",
                 &WorkerTaskClaimRequest {
                     session_id: session.session_id.clone(),
                     task_type: self.task_type.clone(),
@@ -175,10 +174,11 @@ impl HttpRssGateway {
                 "trace_id": metadata.trace_id,
                 "worker_version": metadata.worker_version,
             }),
+            CanonicalJsonMode::PreserveNumberFormatting,
         )?;
         self.api_client
             .post_json::<_, serde_json::Value>(
-                "/workers/tasks/complete",
+                "/workers/api/tasks/complete",
                 &WorkerTaskCompleteRequest {
                     session_id: metadata.session_id.clone(),
                     lease_id: metadata.lease_id.clone(),
@@ -231,10 +231,11 @@ impl HttpRssGateway {
                 "trace_id": metadata.trace_id,
                 "worker_version": metadata.worker_version,
             }),
+            CanonicalJsonMode::PreserveNumberFormatting,
         )?;
         self.api_client
             .post_json::<_, serde_json::Value>(
-                "/workers/tasks/fail",
+                "/workers/api/tasks/fail",
                 &WorkerTaskFailRequest {
                     session_id: metadata.session_id.clone(),
                     lease_id: metadata.lease_id.clone(),
@@ -306,7 +307,7 @@ impl HttpRssGateway {
         let session = self
             .api_client
             .post_json::<_, WorkerSessionOpenRead>(
-                "/workers/sessions/open",
+                "/workers/api/sessions/open",
                 &WorkerSessionOpenRequest {
                     task_type: self.task_type.clone(),
                     worker_version: Some(self.worker_version.clone()),

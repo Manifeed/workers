@@ -1,0 +1,31 @@
+[package]
+name = "worker-desktop"
+version = "0.1.3"
+edition = "2021"
+build = "build.rs"
+readme = "README.md"
+
+[package.metadata.manifeed.release]
+family = "desktop"
+artifact_version_linux_x86_64 = "0.1.3"
+artifact_version_linux_aarch64 = "0.1.3"
+
+[[bin]]
+name = "manifeed-workers"
+path = "src/main.rs"
+
+[features]
+default = []
+live-preview = ["slint/live-preview"]
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+manifeed-worker-common = { path = "../manifeed-worker-common" }
+reqwest = { workspace = true, features = ["blocking", "json", "rustls-tls"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+slint = { workspace = true, default-features = false, features = ["accessibility", "backend-winit", "compat-1-2", "renderer-femtovg", "renderer-software"] }
+
+[build-dependencies]
+slint-build.workspace = true
