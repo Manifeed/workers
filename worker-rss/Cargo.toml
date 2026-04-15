@@ -1,13 +1,13 @@
 [package]
 name = "worker-rss"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 
 [package.metadata.manifeed.release]
 family = "rss"
-worker_version = "0.1.3"
-artifact_version_linux_x86_64 = "0.1.3"
-artifact_version_linux_aarch64 = "0.1.3"
+worker_version = "0.1.4"
+artifact_version_linux_x86_64 = "0.1.4"
+artifact_version_linux_aarch64 = "0.1.4"
 
 [dependencies]
 async-trait.workspace = true

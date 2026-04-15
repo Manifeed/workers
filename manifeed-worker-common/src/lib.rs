@@ -3,6 +3,7 @@ pub mod auth;
 pub mod config;
 pub mod diagnostics;
 pub mod error;
+pub mod gateway;
 pub mod paths;
 pub mod protocol;
 pub mod release;
@@ -27,6 +28,7 @@ pub use error::{
     is_auth_error, user_facing_error_message, user_facing_reqwest_error_message, Result,
     WorkerError,
 };
+pub use gateway::WorkerGatewayClient;
 pub use paths::{
     app_paths, installed_embedding_runtime_bundle_marker_path, installed_embedding_runtime_dir,
     installed_embedding_runtime_library_path, installed_worker_binary_path, AppPaths,
@@ -48,4 +50,4 @@ pub use status::{
     CurrentTaskSnapshot, NetworkTotalsSnapshot, ServerConnectionState, WorkerPhase,
     WorkerStatusHandle, WorkerStatusInit, WorkerStatusSnapshot,
 };
-pub use types::{WorkerTaskClaim, WorkerTaskCommand, WorkerType};
+pub use types::WorkerType;

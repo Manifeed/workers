@@ -61,22 +61,3 @@ impl WorkerType {
         }
     }
 }
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WorkerTaskClaimRequest {
-    pub count: u32,
-    pub lease_seconds: u32,
-    pub worker_version: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WorkerTaskClaim {
-    pub task_id: u64,
-    pub execution_id: u64,
-    pub payload: serde_json::Value,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct WorkerTaskCommand {
-    pub ok: bool,
-}

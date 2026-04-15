@@ -1,12 +1,13 @@
 Package: manifeed-workers-desktop-dbgsym
+Package-Type: ddeb
 Source: manifeed-workers
 Version: 0.1.3-1
 Auto-Built-Package: debug-symbols
 Architecture: amd64
 Maintainer: Manifeed Maintainers <maintainers@manifeed.local>
-Installed-Size: 4964
+Installed-Size: 4970
 Depends: manifeed-workers-desktop (= 0.1.3-1)
 Section: debug
 Priority: optional
 Description: debug symbols for manifeed-workers-desktop
-Build-Ids: 3325fa8c99099a9316ac75ef6ba29ac65c8df7a7
+Build-Ids: ae8b7bdea89cd61120eb9a7bd29d47d1b02229db

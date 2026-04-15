@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::api::ApiTrafficObserver;
@@ -80,7 +80,10 @@ pub struct WorkerStatusHandle {
 struct WorkerStatusInner {
     path: PathBuf,
     snapshot: Mutex<WorkerStatusSnapshot>,
+    last_persisted_at: Mutex<DateTime<Utc>>,
 }
+
+const STATUS_PERSIST_INTERVAL_MS: i64 = 1_000;
 
 impl WorkerStatusHandle {
     pub fn new(path: impl Into<PathBuf>, init: WorkerStatusInit) -> Result<Self> {
@@ -107,6 +110,7 @@ impl WorkerStatusHandle {
                     network_totals: NetworkTotalsSnapshot::default(),
                     last_error: None,
                 }),
+                last_persisted_at: Mutex::new(now),
             }),
         };
         handle.persist()?;
@@ -126,7 +130,7 @@ impl WorkerStatusHandle {
     }
 
     pub fn mark_idle(&self) -> Result<()> {
-        self.update(|snapshot| {
+        self.update_and_persist(true, |snapshot| {
             snapshot.phase = WorkerPhase::Idle;
             snapshot.current_task = None;
             snapshot.current_feed_id = None;
@@ -136,7 +140,7 @@ impl WorkerStatusHandle {
     }
 
     pub fn mark_processing(&self, task: CurrentTaskSnapshot) -> Result<()> {
-        self.update(|snapshot| {
+        self.update_and_persist(true, |snapshot| {
             snapshot.phase = WorkerPhase::Processing;
             snapshot.current_task = Some(task);
             snapshot.last_error = None;
@@ -144,7 +148,7 @@ impl WorkerStatusHandle {
     }
 
     pub fn mark_completed_task(&self) -> Result<()> {
-        self.update(|snapshot| {
+        self.update_and_persist(true, |snapshot| {
             snapshot.phase = WorkerPhase::Idle;
             snapshot.current_task = None;
             snapshot.current_feed_id = None;
@@ -170,7 +174,7 @@ impl WorkerStatusHandle {
 
     pub fn mark_server_disconnected(&self, message: impl Into<String>) -> Result<()> {
         let message = message.into();
-        self.update(|snapshot| {
+        self.update_and_persist(true, |snapshot| {
             snapshot.server_connection = ServerConnectionState::Disconnected;
             snapshot.last_error = Some(message.clone());
         })
@@ -178,14 +182,14 @@ impl WorkerStatusHandle {
 
     pub fn mark_error(&self, message: impl Into<String>) -> Result<()> {
         let message = message.into();
-        self.update(|snapshot| {
+        self.update_and_persist(true, |snapshot| {
             snapshot.phase = WorkerPhase::Error;
             snapshot.last_error = Some(message.clone());
         })
     }
 
     pub fn mark_stopped(&self) -> Result<()> {
-        self.update(|snapshot| {
+        self.update_and_persist(true, |snapshot| {
             snapshot.phase = WorkerPhase::Stopped;
             snapshot.current_task = None;
             snapshot.current_feed_id = None;
@@ -214,6 +218,18 @@ impl WorkerStatusHandle {
     }
 
     pub fn update(&self, update_fn: impl FnOnce(&mut WorkerStatusSnapshot)) -> Result<()> {
+        self.update_and_persist(false, update_fn)
+    }
+
+    pub fn flush(&self) -> Result<()> {
+        self.persist_if_due(true)
+    }
+
+    fn update_and_persist(
+        &self,
+        force_persist: bool,
+        update_fn: impl FnOnce(&mut WorkerStatusSnapshot),
+    ) -> Result<()> {
         {
             let mut snapshot =
                 self.inner.snapshot.lock().map_err(|_| {
@@ -222,7 +238,7 @@ impl WorkerStatusHandle {
             update_fn(&mut snapshot);
             snapshot.last_updated_at = Utc::now();
         }
-        self.persist()
+        self.persist_if_due(force_persist)
     }
 
     fn persist(&self) -> Result<()> {
@@ -230,8 +246,31 @@ impl WorkerStatusHandle {
             .inner
             .snapshot
             .lock()
+            .map_err(|_| WorkerError::Process("worker status mutex poisoned".to_string()))?
+            .clone();
+        persist_snapshot(&self.inner.path, &snapshot)?;
+        *self
+            .inner
+            .last_persisted_at
+            .lock()
+            .map_err(|_| WorkerError::Process("worker status mutex poisoned".to_string()))? =
+            snapshot.last_updated_at;
+        Ok(())
+    }
+
+    fn persist_if_due(&self, force: bool) -> Result<()> {
+        let now = Utc::now();
+        let last_persisted_at = *self
+            .inner
+            .last_persisted_at
+            .lock()
             .map_err(|_| WorkerError::Process("worker status mutex poisoned".to_string()))?;
-        persist_snapshot(&self.inner.path, &snapshot)
+        let is_due =
+            now - last_persisted_at >= ChronoDuration::milliseconds(STATUS_PERSIST_INTERVAL_MS);
+        if force || is_due {
+            self.persist()?;
+        }
+        Ok(())
     }
 }
 
@@ -306,6 +345,38 @@ mod tests {
         let snapshot = handle.snapshot().unwrap();
         assert!(matches!(snapshot.phase, WorkerPhase::Processing));
         assert_eq!(snapshot.completed_task_count, 1);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn record_transfer_is_coalesced_until_flush() {
+        let path = std::env::temp_dir().join(format!(
+            "manifeed-worker-status-transfer-test-{}.json",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let handle = WorkerStatusHandle::new(
+            &path,
+            WorkerStatusInit {
+                worker_type: WorkerType::SourceEmbedding,
+                app_version: "0.1.0".to_string(),
+                acceleration_mode: None,
+                execution_backend: None,
+            },
+        )
+        .unwrap();
+        let initial_payload = fs::read_to_string(&path).unwrap();
+
+        handle.record_transfer(10, 20).unwrap();
+        let coalesced_payload = fs::read_to_string(&path).unwrap();
+        assert_eq!(initial_payload, coalesced_payload);
+
+        handle.flush().unwrap();
+        let flushed_payload = fs::read_to_string(&path).unwrap();
+        assert_ne!(initial_payload, flushed_payload);
 
         let _ = fs::remove_file(path);
     }
