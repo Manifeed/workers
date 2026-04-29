@@ -31,14 +31,14 @@ Les artefacts sont copies dans `workers/dist/debian/`.
 
 ## Publication locale
 
-Pour publier uniquement la famille desktop dans le storage backend et mettre a jour le catalogue :
+Pour publier uniquement la famille desktop dans le storage worker_service et mettre a jour le catalogue :
 
 ```bash
 ../release-workers.sh --family desktop
 ```
 
-Le script publie dans `../../backend/var/worker-releases/desktop/` et met a jour
-`../../backend/var/worker-releases/catalog.json`.
+Le script publie dans `../../worker_service/var/worker-releases/desktop/` et met a jour
+`../../worker_service/var/worker-releases/catalog.json`.
 
 La version de release Linux peut etre decouplee par architecture via
 `artifact_version_linux_x86_64` et `artifact_version_linux_aarch64` dans
@@ -55,7 +55,7 @@ Depuis l'application desktop :
 
 - saisir `API URL` et `API key` pour chaque worker ;
 - installer ou mettre a jour `RSS` et `Embedding` independamment ;
-- les telechargements de bundles passent par le backend avec Bearer worker ;
+- les telechargements de bundles passent par le worker_service avec Bearer worker ;
 - activer le mode service utilisateur si souhaite ;
 - arreter un worker avant `Update` ou `Uninstall` ;
 - les bundles sont refuses si le `sha256` du manifeste est absent ou invalide.

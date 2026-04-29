@@ -58,7 +58,7 @@ cargo build --release -p worker-source-embedding -p worker-desktop
 ## Notes d'architecture
 
 - `dist/` est un artefact genere localement et n'est plus versionne
-- `installers/release-workers.sh` publie dans `../backend/var/worker-releases/` et maintient `catalog.json`
+- `installers/release-workers.sh` publie dans `../worker_service/var/worker-releases/` et maintient `catalog.json`
 - `installers/release/` centralise les helpers manifests/catalogue et les familles `desktop`, `rss`, `embedding`
 - chaque architecture peut porter un `artifact_version_<platform>_<arch>` distinct sans changer le `worker_version` backend
 - l'app desktop lit les status files locaux RSS/Embedding et pilote les deux workers avec deux pages distinctes

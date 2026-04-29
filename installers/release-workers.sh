@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 WORKERS_DIR=$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)
 REPO_ROOT=$(CDPATH= cd -- "${WORKERS_DIR}/.." && pwd)
-BACKEND_DIR="${REPO_ROOT}/backend"
+WORKER_SERVICE_DIR="${REPO_ROOT}/worker_service"
 
 source "${WORKERS_DIR}/installers/release/lib/common.sh"
 source "${WORKERS_DIR}/installers/release/lib/manifest.sh"
@@ -13,7 +13,7 @@ source "${WORKERS_DIR}/installers/release/families/desktop.sh"
 source "${WORKERS_DIR}/installers/release/families/rss.sh"
 source "${WORKERS_DIR}/installers/release/families/embedding.sh"
 
-STORAGE_ROOT="${BACKEND_DIR}/var/worker-releases"
+STORAGE_ROOT="${WORKER_SERVICE_DIR}/var/worker-releases"
 CATALOG_PATH=""
 DOWNLOAD_BASE_URL=""
 RELEASE_NOTES_BASE_URL=""
@@ -31,10 +31,10 @@ Usage: release-workers.sh [options]
 Options:
   --family desktop|rss|embedding Publish only the selected family. Repeatable.
   --skip-build                    Reuse existing artifacts instead of rebuilding them.
-  --dry-run                       Build/stage artifacts outside backend storage and write a preview catalog.
-  --storage-root PATH             Release storage root. Defaults to backend storage, or a temp dir in dry-run.
+  --dry-run                       Build/stage artifacts outside worker service storage and write a preview catalog.
+  --storage-root PATH             Release storage root. Defaults to worker service storage, or a temp dir in dry-run.
   --catalog-path PATH             Catalog JSON path. Defaults to <storage-root>/catalog.json.
-  --download-base-url URL         Public backend base URL for artifact download links.
+  --download-base-url URL         Public worker API base URL for artifact download links.
   --release-notes-base-url URL    Public release notes/download page URL.
   --published-at RFC3339          Override published_at timestamp.
   --help                          Show this help.
