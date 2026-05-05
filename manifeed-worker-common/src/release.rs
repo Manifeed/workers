@@ -2,12 +2,11 @@ use std::fs;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use reqwest::blocking::Client;
 use reqwest::StatusCode;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{user_facing_error_message, Result};
+use crate::{build_blocking_http_client, error::{user_facing_error_message, Result}};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerReleaseManifest {
@@ -143,7 +142,7 @@ fn fetch_manifest(
         query.push(("runtime_bundle", runtime_bundle_value));
     }
 
-    let response = Client::new()
+    let response = build_blocking_http_client(api_url)?
         .get(format!(
             "{}/workers/api/releases/manifest",
             api_url.trim_end_matches('/')

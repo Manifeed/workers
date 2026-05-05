@@ -2,7 +2,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
 
-use reqwest::blocking::Client;
+use manifeed_worker_common::build_blocking_http_client;
 use sha2::{Digest, Sha256};
 
 pub(super) fn download_to_path(
@@ -12,7 +12,9 @@ pub(super) fn download_to_path(
     expected_sha256: &str,
 ) -> Result<(), String> {
     let normalized_sha256 = normalize_sha256(expected_sha256)?;
-    let mut request = Client::new().get(download_url);
+    let mut request = build_blocking_http_client(download_url)
+        .map_err(|error| error.to_string())?
+        .get(download_url);
     if let Some(token) = bearer_token {
         request = request.bearer_auth(token);
     }

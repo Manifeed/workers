@@ -111,6 +111,13 @@ pub(crate) fn compact_status_detail(detail: Option<&str>, fallback: &str) -> Str
     if normalized.contains("timed out") || normalized.contains("timeout") {
         return "Request timeout".to_string();
     }
+    if normalized.contains("certificate")
+        || normalized.contains("tls")
+        || normalized.contains("unknown issuer")
+        || normalized.contains("self-signed")
+    {
+        return "TLS certificate rejected".to_string();
+    }
     if normalized.contains("error sending request")
         || normalized.contains("connection refused")
         || normalized.contains("dns error")

@@ -1,13 +1,13 @@
 [package]
 name = "worker-source-embedding"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 
 [package.metadata.manifeed.release]
 family = "embedding"
 worker_version = "e5-large-v1"
-artifact_version_linux_x86_64 = "0.1.4"
-artifact_version_linux_aarch64 = "0.1.4"
+artifact_version_linux_x86_64 = "0.1.5"
+artifact_version_linux_aarch64 = "0.1.5"
 
 [dependencies]
 async-trait.workspace = true

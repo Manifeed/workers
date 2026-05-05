@@ -23,12 +23,7 @@ impl ApiClient {
         if base_url.is_empty() {
             return Err(WorkerError::Config("MANIFEED_API_URL is empty".to_string()));
         }
-        let client = reqwest::Client::builder()
-            .user_agent(format!(
-                "manifeed-worker-rust/{}",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .build()?;
+        let client = build_http_client(&base_url)?;
         Ok(Self {
             base_url,
             client,
@@ -164,6 +159,62 @@ impl ApiClient {
     }
 }
 
+fn build_http_client(base_url: &str) -> Result<reqwest::Client> {
+    let mut builder = http_client_builder(base_url);
+
+    if should_accept_invalid_localhost_tls(base_url) {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+
+    Ok(builder.build()?)
+}
+
+pub fn build_blocking_http_client(base_url: &str) -> Result<reqwest::blocking::Client> {
+    let mut builder = reqwest::blocking::Client::builder().user_agent(format!(
+        "manifeed-worker-rust/{}",
+        env!("CARGO_PKG_VERSION")
+    ));
+
+    if should_accept_invalid_localhost_tls(base_url) {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+
+    Ok(builder.build()?)
+}
+
+fn http_client_builder(base_url: &str) -> reqwest::ClientBuilder {
+    let mut builder = reqwest::Client::builder().user_agent(format!(
+        "manifeed-worker-rust/{}",
+        env!("CARGO_PKG_VERSION")
+    ));
+
+    if should_accept_invalid_localhost_tls(base_url) {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+
+    builder
+}
+
+fn should_accept_invalid_localhost_tls(base_url: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(base_url) else {
+        return false;
+    };
+
+    if url.scheme() != "https" {
+        return false;
+    }
+
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+
+    host.eq_ignore_ascii_case("localhost")
+        || host.eq_ignore_ascii_case("127.0.0.1")
+        || host == "::1"
+        || host == "[::1]"
+        || host.to_ascii_lowercase().ends_with(".localhost")
+}
+
 fn response_body_preview(bytes: &[u8]) -> String {
     const MAX_PREVIEW_CHARS: usize = 400;
 
@@ -173,5 +224,25 @@ fn response_body_preview(bytes: &[u8]) -> String {
         format!("{preview}...")
     } else {
         preview
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_accept_invalid_localhost_tls;
+
+    #[test]
+    fn localhost_https_accepts_invalid_tls_for_dev() {
+        assert!(should_accept_invalid_localhost_tls("https://localhost"));
+        assert!(should_accept_invalid_localhost_tls("https://127.0.0.1"));
+        assert!(should_accept_invalid_localhost_tls("https://[::1]"));
+        assert!(should_accept_invalid_localhost_tls("https://api.localhost"));
+    }
+
+    #[test]
+    fn non_local_or_non_https_urls_keep_tls_validation() {
+        assert!(!should_accept_invalid_localhost_tls("http://localhost"));
+        assert!(!should_accept_invalid_localhost_tls("https://example.com"));
+        assert!(!should_accept_invalid_localhost_tls("not-a-url"));
     }
 }

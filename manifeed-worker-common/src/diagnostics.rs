@@ -1,9 +1,8 @@
 use chrono::{DateTime, Utc};
-use reqwest::blocking::Client;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Result, WorkerError};
+use crate::{build_blocking_http_client, error::{Result, WorkerError}};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerConnectionCheck {
@@ -23,7 +22,7 @@ struct WorkerPingRead {
 }
 
 pub fn check_worker_connection(api_url: &str, api_key: &str) -> Result<WorkerConnectionCheck> {
-    let response = Client::new()
+    let response = build_blocking_http_client(api_url)?
         .get(format!(
             "{}/workers/api/ping",
             api_url.trim_end_matches('/')

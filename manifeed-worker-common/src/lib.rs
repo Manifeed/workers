@@ -11,7 +11,7 @@ pub mod service;
 pub mod status;
 pub mod types;
 
-pub use api::{ApiClient, ApiTrafficObserver};
+pub use api::{build_blocking_http_client, ApiClient, ApiTrafficObserver};
 pub use auth::{WorkerAuthConfig, WorkerAuthenticator};
 pub use config::{
     load_workers_config, resolve_workers_config_path, save_workers_config, AccelerationMode,

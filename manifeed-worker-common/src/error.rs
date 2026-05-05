@@ -47,6 +47,14 @@ pub fn user_facing_reqwest_error_message(error: &reqwest::Error) -> String {
     if error.is_timeout() {
         return "Request timeout".to_string();
     }
+    let normalized = error.to_string().to_ascii_lowercase();
+    if normalized.contains("certificate")
+        || normalized.contains("tls")
+        || normalized.contains("unknown issuer")
+        || normalized.contains("self-signed")
+    {
+        return "TLS certificate rejected".to_string();
+    }
     if error.is_connect() || error.is_request() {
         return "Backend offline".to_string();
     }

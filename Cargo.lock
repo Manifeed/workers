@@ -7423,7 +7423,7 @@ dependencies = [
 
 [[package]]
 name = "worker-desktop"
-version = "0.1.3"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "manifeed-worker-common",
@@ -7437,7 +7437,7 @@ dependencies = [
 
 [[package]]
 name = "worker-rss"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -7459,7 +7459,7 @@ dependencies = [
 
 [[package]]
 name = "worker-source-embedding"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "chrono",

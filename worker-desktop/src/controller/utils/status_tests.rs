@@ -78,6 +78,13 @@ fn compact_status_detail_maps_verbose_errors_to_short_labels() {
     );
     assert_eq!(
         compact_status_detail(
+            Some("http error: error sending request for url https://localhost: client error (Connect): self-signed certificate"),
+            "Worker error",
+        ),
+        "TLS certificate rejected"
+    );
+    assert_eq!(
+        compact_status_detail(
             Some("http error: error sending request for url http://example.com"),
             "Worker error",
         ),
