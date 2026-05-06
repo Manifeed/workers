@@ -1,15 +1,44 @@
+# Build artifacts
 target/
 dist/
 .cargo-home/
+
+# Tool caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.sccache/
+
+# Rust incremental / generated files
+*.pdb
+
+# Logs
 *.log
+
+# Local environment
 .env
 .env.*
+
+# Editors / OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Python leftovers
+__pycache__/
+*.pyc
+
+# Debian packaging artifacts
 installers/*.deb
 installers/*.ddeb
 installers/*.changes
 installers/*.buildinfo
+installers/*.tar.*
 installers/debian/debian/*.substvars
 installers/debian/debian/files
 installers/debian/debian/.debhelper/
 installers/debian/debian/debhelper-build-stamp
 installers/debian/debian/manifeed-workers-desktop/
+installers/debian/debian/tmp/
