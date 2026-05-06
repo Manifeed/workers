@@ -15,6 +15,7 @@ build_embedding_bundle_linux() {
   install -d "${bundle_dir}/bin" "${bundle_dir}/runtime"
   install -m 0755 "${WORKERS_DIR}/target/release/worker-source-embedding" \
     "${bundle_dir}/bin/worker-source-embedding"
+  strip_binary_in_place "${bundle_dir}/bin/worker-source-embedding"
 
   case "${arch}" in
     x86_64) deb_arch="amd64" ;;
@@ -66,6 +67,7 @@ build_embedding_bundle_macos() {
   install -d "${bundle_dir}/bin" "${bundle_dir}/runtime"
   install -m 0755 "${WORKERS_DIR}/target/release/worker-source-embedding" \
     "${bundle_dir}/bin/worker-source-embedding"
+  strip_binary_in_place "${bundle_dir}/bin/worker-source-embedding"
   cp -a "${runtime_dir}/." "${bundle_dir}/runtime/"
 
   write_bundle_manifest \
@@ -107,6 +109,8 @@ publish_embedding_family_linux() {
       printf 'Embedding bundle not found at %s\n' "${source}" >&2
       exit 1
     fi
+
+    prune_artifacts_in_directory "${output_dir}" "embedding_worker_bundle-*-linux-${arch}-${runtime_bundle}.tar.gz" "${artifact_name}"
 
     storage_relative_path="embedding/${artifact_name}"
     destination="${STORAGE_ROOT}/${storage_relative_path}"
@@ -165,6 +169,7 @@ publish_embedding_family_macos() {
     fi
 
     built_any=1
+    prune_artifacts_in_directory "${output_dir}" "embedding_worker_bundle-*-macos-${arch}-${runtime_bundle}.tar.gz" "${artifact_name}"
     storage_relative_path="embedding/${artifact_name}"
     destination="${STORAGE_ROOT}/${storage_relative_path}"
     copy_file "${source}" "${destination}"

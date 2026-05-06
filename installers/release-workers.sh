@@ -190,7 +190,8 @@ main() {
     "${CATALOG_PATH}" \
     "${DOWNLOAD_BASE_URL}" \
     "${RELEASE_NOTES_BASE_URL}" \
-    "${PUBLISHED_AT}"
+    "${PUBLISHED_AT}" \
+    "${STORAGE_ROOT}"
 
   if [[ ${DRY_RUN} -eq 1 ]]; then
     printf 'Dry run artifacts staged under %s\n' "${STORAGE_ROOT}"

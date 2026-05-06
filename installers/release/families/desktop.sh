@@ -20,6 +20,7 @@ publish_linux_desktop() {
   fi
 
   basename=$(basename "${source}")
+  prune_artifacts_in_directory "${dist_dir}" "manifeed-workers-desktop_*_${deb_arch}.deb" "${basename}"
   arch=$(current_release_arch)
   storage_relative_path="desktop/${basename}"
   destination="${STORAGE_ROOT}/${storage_relative_path}"

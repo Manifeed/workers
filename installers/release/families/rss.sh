@@ -15,6 +15,7 @@ build_rss_bundle() {
   install -d "${bundle_dir}/bin"
   install -m 0755 "${WORKERS_DIR}/target/release/worker-rss" \
     "${bundle_dir}/bin/worker-rss"
+  strip_binary_in_place "${bundle_dir}/bin/worker-rss"
   write_bundle_manifest \
     "${bundle_dir}/manifest.json" \
     "rss_worker_bundle" \
@@ -47,6 +48,8 @@ publish_rss_family() {
     printf 'RSS bundle not found at %s\n' "${source}" >&2
     exit 1
   fi
+
+  prune_artifacts_in_directory "${output_dir}" "rss_worker_bundle-*-${platform}-${arch}.tar.gz" "${artifact_name}"
 
   copy_file "${source}" "${destination}"
   append_catalog_metadata \

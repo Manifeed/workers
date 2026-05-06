@@ -7,6 +7,22 @@ require_cmd() {
   }
 }
 
+strip_binary_in_place() {
+  local binary_path=$1
+
+  [[ -f "${binary_path}" ]] || return 0
+  command -v strip >/dev/null 2>&1 || return 0
+
+  case "$(current_os)" in
+    linux)
+      strip --strip-unneeded "${binary_path}" 2>/dev/null || strip "${binary_path}" 2>/dev/null || true
+      ;;
+    darwin)
+      strip -x "${binary_path}" 2>/dev/null || true
+      ;;
+  esac
+}
+
 normalize_url_base() {
   printf '%s' "${1%/}"
 }
@@ -115,5 +131,16 @@ pack_bundle_directory() {
   local source_dir=$1
   local output_path=$2
   install -d "$(dirname "${output_path}")"
-  tar -czf "${output_path}" -C "$(dirname "${source_dir}")" "$(basename "${source_dir}")"
+  tar -C "$(dirname "${source_dir}")" -cf - "$(basename "${source_dir}")" \
+    | gzip -n -9 > "${output_path}"
+}
+
+prune_artifacts_in_directory() {
+  local directory=$1
+  local glob_pattern=$2
+  local keep_basename=$3
+
+  [[ -d "${directory}" ]] || return 0
+
+  find "${directory}" -maxdepth 1 -type f -name "${glob_pattern}" ! -name "${keep_basename}" -delete
 }

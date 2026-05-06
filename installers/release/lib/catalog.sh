@@ -33,8 +33,9 @@ update_catalog() {
   local download_base_url=$3
   local release_notes_base_url=$4
   local published_at=$5
+  local storage_root=$6
 
-  python3 - "${metadata_path}" "${catalog_path}" "${download_base_url}" "${release_notes_base_url}" "${published_at}" <<'PY'
+  python3 - "${metadata_path}" "${catalog_path}" "${download_base_url}" "${release_notes_base_url}" "${published_at}" "${storage_root}" <<'PY'
 import hashlib
 import json
 import re
@@ -46,6 +47,8 @@ catalog_path = Path(sys.argv[2])
 download_base_url = sys.argv[3].rstrip("/")
 release_notes_base_url = sys.argv[4].rstrip("/")
 published_at = sys.argv[5]
+storage_root_arg = sys.argv[6].strip()
+storage_root = Path(storage_root_arg).resolve() if storage_root_arg else None
 
 if catalog_path.exists():
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -108,6 +111,16 @@ def release_identity(item: dict) -> tuple:
     )
 
 
+def release_slot(item: dict) -> tuple:
+    return (
+        item.get("family"),
+        item.get("product"),
+        item.get("platform"),
+        item.get("arch"),
+        item.get("runtime_bundle"),
+    )
+
+
 def normalize_preserved_item(item: dict) -> dict:
     artifact_name = item.get("artifact_name") or ""
     match = version_pattern.search(artifact_name)
@@ -120,10 +133,18 @@ def normalize_preserved_item(item: dict) -> dict:
     return normalized
 
 new_identities = {release_identity(item) for item in new_items}
+new_slots = {release_slot(item) for item in new_items}
+new_storage_paths = {
+    (item.get("storage_relative_path") or "").strip()
+    for item in new_items
+    if (item.get("storage_relative_path") or "").strip()
+}
 
 preserved_items = []
+stale_items = []
 for item in catalog.get("items", []):
-    if release_identity(item) in new_identities:
+    if release_identity(item) in new_identities or release_slot(item) in new_slots:
+        stale_items.append(item)
         continue
     preserved_items.append(normalize_preserved_item(item))
 
@@ -141,5 +162,28 @@ catalog["items"].sort(
 )
 catalog_path.parent.mkdir(parents=True, exist_ok=True)
 catalog_path.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
+
+if storage_root is not None and storage_root.exists():
+    for item in stale_items:
+        storage_relative_path = (item.get("storage_relative_path") or "").strip()
+        if not storage_relative_path:
+            continue
+        if storage_relative_path in new_storage_paths:
+            continue
+        artifact_path = (storage_root / storage_relative_path).resolve()
+        try:
+            artifact_path.relative_to(storage_root)
+        except ValueError:
+            continue
+        if artifact_path.is_file():
+            artifact_path.unlink()
+
+        parent = artifact_path.parent
+        while parent != storage_root and parent.exists():
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
 PY
 }
