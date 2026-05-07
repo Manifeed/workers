@@ -1,4 +1,3 @@
-import { EmbeddingWorkerPanel } from "../panels/embedding-worker-panel.slint";
 import { RssWorkerPanel } from "../panels/rss-worker-panel.slint";
 import { SettingsPanel } from "../panels/settings-panel.slint";
 import { DashboardLayoutBase } from "dashboard-layout-base.slint";
@@ -37,19 +36,5 @@ export component DashboardSingleColumn inherits DashboardLayoutBase {
 			uninstall => { root.rss_uninstall(); }
 		}
 
-		EmbeddingWorkerPanel {
-			card_width: root.card_width;
-			card: root.embedding_card;
-			api_key <=> root.embedding_api_key;
-			run_mode_index <=> root.embedding_run_mode_index;
-				acceleration_index <=> root.embedding_acceleration_index;
-				batch_size <=> root.embedding_batch_size;
-				app_busy: root.app_busy;
-				app_read_only: root.app_read_only;
-				check_api => { root.embedding_check_api(); }
-			install_or_update => { root.embedding_install_or_update(); }
-			toggle_run => { root.embedding_toggle_run(); }
-			uninstall => { root.embedding_uninstall(); }
-		}
 	}
 }

@@ -2,7 +2,6 @@
 members = [
   "manifeed-worker-common",
   "worker-rss",
-  "worker-source-embedding",
   "worker-desktop",
 ]
 resolver = "2"

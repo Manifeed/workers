@@ -1,6 +1,6 @@
 use manifeed_worker_common::{EmbeddingRuntimeBundle, ServiceMode, WorkerType, WorkersConfig};
 
-pub const ALL_WORKERS: [WorkerType; 2] = [WorkerType::RssScrapper, WorkerType::SourceEmbedding];
+pub const ALL_WORKERS: [WorkerType; 1] = [WorkerType::RssScrapper];
 
 pub fn api_credentials(config: &WorkersConfig, worker_type: WorkerType) -> (&str, &str) {
     (
