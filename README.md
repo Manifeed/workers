@@ -49,13 +49,13 @@ cargo build --release -p crawler_rss
 ## Notes d'architecture
 
 - `dist/` est un artefact genere localement et n'est plus versionne
-- `installers/release-workers.sh` publie dans `../worker_service/var/worker-releases/` et maintient `catalog.json` (release "interne" backend)
+- `installers/release-workers.sh` peut encore publier un miroir local sous `../worker_service/var/worker-releases/` (outil interne optionnel ; la prod consomme GitHub)
 - `installers/release/` centralise les helpers manifests/catalogue et la famille `rss`
 - chaque architecture peut porter un `artifact_version_<platform>_<arch>` distinct sans changer le `worker_version` backend
 - les bundles workers sont extraits dans `~/.local/share/manifeed/<worker>/current`
 - la famille `rss` publie `crawler_rss_bundle`
-- les bundles, paquets et CLI verifient leur version via `/workers/api/releases/manifest`
-- le bundle RSS exige une API key worker valide
+- les bundles, paquets et CLI verifient leur version via l'API GitHub `releases/latest` du depot `Manifeed/workers`
+- le telechargement du bundle GitHub est public ; `crawler_rss run` exige une cle API worker `rss_scrapper` valide cote gateway
 
 ## Pipeline de release GitHub
 

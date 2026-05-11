@@ -17,7 +17,7 @@ use tracing::{error, info, warn};
 
 const RUN_ERROR_SLEEP_SECONDS: u64 = 3;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-const DEFAULT_GITHUB_REPOSITORY: &str = "Manifeed/manifeed";
+const DEFAULT_GITHUB_REPOSITORY: &str = "Manifeed/workers";
 
 #[derive(Parser)]
 #[command(name = "crawler_rss")]
@@ -107,7 +107,7 @@ async fn run_command(args: RunArgs) -> Result<(), Box<dyn std::error::Error + Se
         api_key: args.api_key,
         concurrency: args.concurrency,
     })?;
-    validate_release_status(&config.api_url).await?;
+    validate_release_status().await?;
 
     let gateway = HttpRssGateway::new(&config)?;
     let fetcher = HttpFeedFetcher::new(
@@ -203,11 +203,11 @@ fn redact_secret(value: &str) -> String {
     format!("{}***{}", &value[..4], &value[value.len() - 4..])
 }
 
-async fn validate_release_status(
-    api_url: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn validate_release_status() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let github_repository = std::env::var("MANIFEED_WORKER_GITHUB_REPOSITORY")
+        .unwrap_or_else(|_| DEFAULT_GITHUB_REPOSITORY.to_string());
     let release = check_worker_release_status(
-        api_url,
+        &github_repository,
         WorkerType::RssScrapper.cli_product(),
         APP_VERSION,
         &app_paths()?

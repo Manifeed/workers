@@ -2,11 +2,11 @@ use std::fs;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use reqwest::StatusCode;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Result, WorkerError};
+use crate::error::Result;
+use crate::github_update::resolve_github_bundle_descriptor;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerReleaseManifest {
@@ -62,14 +62,14 @@ pub fn resolve_release_arch() -> String {
 }
 
 pub async fn check_worker_release_status(
-    api_url: &str,
+    github_repository: &str,
     product: &str,
     current_version: &str,
     cache_path: &Path,
 ) -> Result<WorkerReleaseStatus> {
     let platform = resolve_release_platform();
     let arch = resolve_release_arch();
-    match fetch_manifest(api_url, product, &platform, &arch).await {
+    match fetch_manifest_from_github(github_repository, product, &platform, &arch).await {
         Ok(manifest) => {
             persist_manifest_cache(cache_path, &manifest)?;
             Ok(classify_release_status(
@@ -102,32 +102,36 @@ pub async fn check_worker_release_status(
     }
 }
 
-async fn fetch_manifest(
-    api_url: &str,
+async fn fetch_manifest_from_github(
+    github_repository: &str,
     product: &str,
     platform: &str,
     arch: &str,
 ) -> Result<WorkerReleaseManifest> {
-    let response = reqwest::Client::builder()
-        .user_agent(format!("crawler_rss/{}", env!("CARGO_PKG_VERSION")))
-        .build()?
-        .get(format!(
-            "{}/workers/api/releases/manifest",
-            api_url.trim_end_matches('/')
+    let descriptor = resolve_github_bundle_descriptor(github_repository).await?;
+    if !descriptor.artifact_name.contains(product) {
+        return Err(crate::error::WorkerError::Version(format!(
+            "release artifact {} does not match product {}",
+            descriptor.artifact_name, product
         ))
-        .query(&[("product", product), ("platform", platform), ("arch", arch)])
-        .send()
-        .await?;
-    let status = response.status();
-    if status != StatusCode::OK {
-        let body = response.text().await.unwrap_or_default();
-        return Err(WorkerError::Api {
-            status: status.as_u16(),
-            message: body,
-        }
         .into());
     }
-    Ok(response.json::<WorkerReleaseManifest>().await?)
+    Ok(WorkerReleaseManifest {
+        artifact_name: descriptor.artifact_name,
+        family: "rss".to_string(),
+        product: product.to_string(),
+        platform: platform.to_string(),
+        arch: arch.to_string(),
+        latest_version: descriptor.latest_version.clone(),
+        minimum_supported_version: "0.0.0".to_string(),
+        worker_version: Some(descriptor.latest_version),
+        artifact_kind: "tarball".to_string(),
+        sha256: descriptor.sha256,
+        download_auth: "public".to_string(),
+        download_url: descriptor.download_url,
+        release_notes_url: descriptor.html_url,
+        published_at: descriptor.published_at,
+    })
 }
 
 fn load_manifest_cache(cache_path: &Path) -> Result<Option<WorkerReleaseManifest>> {
