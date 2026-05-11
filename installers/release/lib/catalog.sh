@@ -8,12 +8,11 @@ append_catalog_metadata() {
   local arch=$5
   local version=$6
   local worker_version=$7
-  local runtime_bundle=$8
-  local artifact_kind=$9
-  local download_auth=${10}
-  local storage_relative_path=${11}
+  local artifact_kind=$8
+  local download_auth=$9
+  local storage_relative_path=${10}
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${source_path}" \
     "${family}" \
     "${product}" \
@@ -21,7 +20,6 @@ append_catalog_metadata() {
     "${arch}" \
     "${version}" \
     "${worker_version}" \
-    "${runtime_bundle}" \
     "${artifact_kind}" \
     "${download_auth}" \
     "${storage_relative_path}" >> "${METADATA_PATH}"
@@ -69,7 +67,6 @@ for raw_line in metadata_path.read_text(encoding="utf-8").splitlines():
         arch,
         version,
         worker_version,
-        runtime_bundle,
         artifact_kind,
         download_auth,
         storage_relative_path,
@@ -94,8 +91,6 @@ for raw_line in metadata_path.read_text(encoding="utf-8").splitlines():
     }
     if worker_version.strip():
         item["worker_version"] = worker_version
-    if runtime_bundle.strip():
-        item["runtime_bundle"] = runtime_bundle
     new_items.append(item)
 
 def release_identity(item: dict) -> tuple:
@@ -104,7 +99,6 @@ def release_identity(item: dict) -> tuple:
         item.get("product"),
         item.get("platform"),
         item.get("arch"),
-        item.get("runtime_bundle"),
         item.get("artifact_name")
         or item.get("storage_relative_path")
         or item.get("download_url"),
@@ -117,7 +111,6 @@ def release_slot(item: dict) -> tuple:
         item.get("product"),
         item.get("platform"),
         item.get("arch"),
-        item.get("runtime_bundle"),
     )
 
 
@@ -155,7 +148,6 @@ catalog["items"].sort(
         item["platform"],
         item["product"],
         item["arch"],
-        item.get("runtime_bundle") or "",
         item.get("latest_version", ""),
         item.get("artifact_name", ""),
     )

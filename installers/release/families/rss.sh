@@ -9,19 +9,18 @@ build_rss_bundle() {
   local work_dir bundle_dir
 
   work_dir=$(mktemp -d)
-  bundle_dir="${work_dir}/rss_worker_bundle-${version}-${arch}"
+  bundle_dir="${work_dir}/crawler_rss_bundle-${version}-${arch}"
   trap 'rm -rf "${work_dir}"' RETURN
 
   install -d "${bundle_dir}/bin"
-  install -m 0755 "${WORKERS_DIR}/target/release/worker-rss" \
-    "${bundle_dir}/bin/worker-rss"
-  strip_binary_in_place "${bundle_dir}/bin/worker-rss"
+  install -m 0755 "${WORKERS_DIR}/target/release/crawler_rss" \
+    "${bundle_dir}/bin/crawler_rss"
+  strip_binary_in_place "${bundle_dir}/bin/crawler_rss"
   write_bundle_manifest \
     "${bundle_dir}/manifest.json" \
-    "rss_worker_bundle" \
+    "crawler_rss_bundle" \
     "${version}" \
-    "${worker_version}" \
-    ""
+    "${worker_version}"
   pack_bundle_directory "${bundle_dir}" "${output_path}"
 
   rm -rf "${work_dir}"
@@ -34,13 +33,13 @@ publish_rss_family() {
   local version=$3
   local worker_version=$4
   local output_dir="${WORKERS_DIR}/dist/bundles/${platform}"
-  local artifact_name="rss_worker_bundle-${version}-${platform}-${arch}.tar.gz"
+  local artifact_name="crawler_rss_bundle-${version}-${platform}-${arch}.tar.gz"
   local source="${output_dir}/${artifact_name}"
   local storage_relative_path="rss/${artifact_name}"
   local destination="${STORAGE_ROOT}/${storage_relative_path}"
 
   if [[ ${SKIP_BUILD} -eq 0 ]]; then
-    cargo build --release -p worker-rss --manifest-path "${WORKERS_DIR}/Cargo.toml"
+    cargo build --release -p crawler_rss --manifest-path "${WORKERS_DIR}/Cargo.toml"
     build_rss_bundle "${platform}" "${arch}" "${version}" "${worker_version}" "${source}"
   fi
 
@@ -49,18 +48,17 @@ publish_rss_family() {
     exit 1
   fi
 
-  prune_artifacts_in_directory "${output_dir}" "rss_worker_bundle-*-${platform}-${arch}.tar.gz" "${artifact_name}"
+  prune_artifacts_in_directory "${output_dir}" "crawler_rss_bundle-*-${platform}-${arch}.tar.gz" "${artifact_name}"
 
   copy_file "${source}" "${destination}"
   append_catalog_metadata \
     "${destination}" \
     "rss" \
-    "rss_worker_bundle" \
+    "crawler_rss_bundle" \
     "${platform}" \
     "${arch}" \
     "${version}" \
     "${worker_version}" \
-    "" \
     "worker_bundle" \
     "worker_bearer" \
     "${storage_relative_path}"

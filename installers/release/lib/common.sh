@@ -89,42 +89,19 @@ copy_file() {
   cp -f "${source}" "${destination}"
 }
 
-find_linux_desktop_package() {
-  local directory=$1
-  local version=$2
-  local deb_arch=$3
-  find "${directory}" -maxdepth 1 -type f \
-    -name "manifeed-workers-desktop_${version}-*_${deb_arch}.deb" \
-    -printf '%p\n' 2>/dev/null \
-    | sort -V \
-    | tail -n 1
-}
-
 write_bundle_manifest() {
   local destination=$1
   local product=$2
   local version=$3
   local worker_version=$4
-  local runtime_bundle=$5
 
-  if [[ -n "${runtime_bundle}" ]]; then
-    cat > "${destination}" <<EOF
-{
-  "product": "${product}",
-  "version": "${version}",
-  "worker_version": "${worker_version}",
-  "runtime_bundle": "${runtime_bundle}"
-}
-EOF
-  else
-    cat > "${destination}" <<EOF
+  cat > "${destination}" <<EOF
 {
   "product": "${product}",
   "version": "${version}",
   "worker_version": "${worker_version}"
 }
 EOF
-  fi
 }
 
 pack_bundle_directory() {

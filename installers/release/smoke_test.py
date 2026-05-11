@@ -22,12 +22,12 @@ def main() -> int:
         current_arch = release_arch()
         materialize_fixture_artifacts(workers_dir, helper_tmp, stack, current_platform, current_arch)
 
-        for family in ("desktop", "rss", "embedding"):
+        for family in ("rss",):
             run_family_smoke_test(workers_dir, helper_tmp, family)
     finally:
         stack.close()
 
-    print("release-workers.sh dry-run smoke tests passed for desktop, rss and embedding")
+    print("release-workers.sh dry-run smoke tests passed for rss")
     return 0
 
 
@@ -56,10 +56,6 @@ def run_family_smoke_test(workers_dir: Path, helper_tmp: Path, family: str) -> N
     if not items:
         raise AssertionError(f"no catalog items generated for family={family}")
 
-    if family == "embedding" and release_platform() == "linux" and release_arch() == "x86_64":
-        runtime_bundles = sorted(item.get("runtime_bundle") for item in items)
-        assert runtime_bundles == ["cuda12", "none"], runtime_bundles
-
 
 def materialize_fixture_artifacts(
     workers_dir: Path,
@@ -68,58 +64,20 @@ def materialize_fixture_artifacts(
     current_platform: str,
     current_arch: str,
 ) -> None:
-    desktop_manifest = load_manifest(workers_dir / "worker-desktop" / "Cargo.toml")
-    rss_manifest = load_manifest(workers_dir / "worker-rss" / "Cargo.toml")
-    embedding_manifest = load_manifest(workers_dir / "worker-source-embedding" / "Cargo.toml")
+    rss_manifest = load_manifest(workers_dir / "crawler_rss" / "Cargo.toml")
 
-    desktop_version = resolve_artifact_version(desktop_manifest, current_platform, current_arch)
     rss_version = resolve_artifact_version(rss_manifest, current_platform, current_arch)
-    embedding_version = resolve_artifact_version(embedding_manifest, current_platform, current_arch)
-
-    if current_platform == "linux":
-        deb_arch = "amd64" if current_arch == "x86_64" else "arm64"
-        register_fixture_file(
-            workers_dir / "dist" / "debian" / f"manifeed-workers-desktop_{desktop_version}-1_{deb_arch}.deb",
-            f"desktop-{desktop_version}-{deb_arch}".encode("utf-8"),
-            helper_tmp,
-            stack,
-        )
-    else:
-        register_fixture_file(
-            workers_dir / "dist" / "macos" / "Manifeed Workers.dmg",
-            f"desktop-{desktop_version}-dmg".encode("utf-8"),
-            helper_tmp,
-            stack,
-        )
 
     register_fixture_file(
         workers_dir
         / "dist"
         / "bundles"
         / current_platform
-        / f"rss_worker_bundle-{rss_version}-{current_platform}-{current_arch}.tar.gz",
+        / f"crawler_rss_bundle-{rss_version}-{current_platform}-{current_arch}.tar.gz",
         f"rss-{rss_version}-{current_platform}-{current_arch}".encode("utf-8"),
         helper_tmp,
         stack,
     )
-
-    embedding_bundles = ["none"]
-    if current_platform == "linux" and current_arch == "x86_64":
-        embedding_bundles.append("cuda12")
-    if current_platform == "macos":
-        embedding_bundles.append("coreml")
-
-    for runtime_bundle in embedding_bundles:
-        register_fixture_file(
-            workers_dir
-            / "dist"
-            / "bundles"
-            / current_platform
-            / f"embedding_worker_bundle-{embedding_version}-{current_platform}-{current_arch}-{runtime_bundle}.tar.gz",
-            f"embedding-{embedding_version}-{runtime_bundle}".encode("utf-8"),
-            helper_tmp,
-            stack,
-        )
 
 
 def register_fixture_file(

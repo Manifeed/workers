@@ -1,0 +1,33 @@
+[package]
+name = "crawler_rss"
+version = "0.1.5"
+edition = "2021"
+
+[package.metadata.manifeed.release]
+family = "rss"
+worker_version = "0.1.5"
+artifact_version_linux_x86_64 = "0.1.5"
+artifact_version_linux_aarch64 = "0.1.5"
+
+[dependencies]
+async-trait.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, features = ["derive", "env"] }
+directories.workspace = true
+feed-rs.workspace = true
+hex.workspace = true
+hmac.workspace = true
+html-escape.workspace = true
+httpdate.workspace = true
+reqwest = { workspace = true, features = ["brotli", "deflate", "gzip", "json", "rustls-tls"] }
+regex.workspace = true
+semver.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+unicode-normalization.workspace = true
+uuid = { workspace = true, features = ["v4", "fast-rng"] }

@@ -9,9 +9,7 @@ WORKER_SERVICE_DIR="${REPO_ROOT}/worker_service"
 source "${WORKERS_DIR}/installers/release/lib/common.sh"
 source "${WORKERS_DIR}/installers/release/lib/manifest.sh"
 source "${WORKERS_DIR}/installers/release/lib/catalog.sh"
-source "${WORKERS_DIR}/installers/release/families/desktop.sh"
 source "${WORKERS_DIR}/installers/release/families/rss.sh"
-source "${WORKERS_DIR}/installers/release/families/embedding.sh"
 
 STORAGE_ROOT="${WORKER_SERVICE_DIR}/var/worker-releases"
 CATALOG_PATH=""
@@ -29,7 +27,7 @@ usage() {
 Usage: release-workers.sh [options]
 
 Options:
-  --family desktop|rss|embedding Publish only the selected family. Repeatable.
+  --family rss                   Publish only the selected family. Repeatable.
   --skip-build                    Reuse existing artifacts instead of rebuilding them.
   --dry-run                       Build/stage artifacts outside worker service storage and write a preview catalog.
   --storage-root PATH             Release storage root. Defaults to worker service storage, or a temp dir in dry-run.
@@ -51,7 +49,7 @@ parse_args() {
       --family)
         shift
         case "${1:-}" in
-          desktop|rss|embedding) FAMILIES+=("$1") ;;
+          rss) FAMILIES+=("$1") ;;
           *)
             printf 'Unknown family: %s\n' "${1:-}" >&2
             exit 1
@@ -120,7 +118,7 @@ main() {
   require_cmd tar
 
   if [[ ${#FAMILIES[@]} -eq 0 ]]; then
-    FAMILIES=(desktop rss embedding)
+    FAMILIES=(rss)
   fi
 
   if [[ -z "${PUBLISHED_AT}" ]]; then
@@ -144,38 +142,20 @@ main() {
   trap 'rm -f "${METADATA_PATH:-}"' EXIT
 
   local platform arch
-  local desktop_version rss_version rss_worker_version embedding_version embedding_worker_version
+  local rss_version rss_worker_version
   platform=$(current_release_platform)
   arch=$(current_release_arch)
 
-  desktop_version=$(resolve_artifact_version "${WORKERS_DIR}/worker-desktop/Cargo.toml" "${platform}" "${arch}")
-  rss_version=$(resolve_artifact_version "${WORKERS_DIR}/worker-rss/Cargo.toml" "${platform}" "${arch}")
-  rss_worker_version=$(resolve_worker_version_metadata "${WORKERS_DIR}/worker-rss/Cargo.toml")
+  rss_version=$(resolve_artifact_version "${WORKERS_DIR}/crawler_rss/Cargo.toml" "${platform}" "${arch}")
+  rss_worker_version=$(resolve_worker_version_metadata "${WORKERS_DIR}/crawler_rss/Cargo.toml")
   if [[ -z "${rss_worker_version}" ]]; then
-    rss_worker_version=$(resolve_package_version "${WORKERS_DIR}/worker-rss/Cargo.toml")
-  fi
-  embedding_version=$(resolve_artifact_version "${WORKERS_DIR}/worker-source-embedding/Cargo.toml" "${platform}" "${arch}")
-  embedding_worker_version=$(resolve_worker_version_metadata "${WORKERS_DIR}/worker-source-embedding/Cargo.toml")
-  if [[ -z "${embedding_worker_version}" ]]; then
-    embedding_worker_version=$(resolve_package_version "${WORKERS_DIR}/worker-source-embedding/Cargo.toml")
+    rss_worker_version=$(resolve_package_version "${WORKERS_DIR}/crawler_rss/Cargo.toml")
   fi
 
   for family in "${FAMILIES[@]}"; do
     case "${family}" in
-      desktop)
-        case "${platform}" in
-          linux) publish_linux_desktop "${desktop_version}" ;;
-          macos) publish_macos_desktop "${desktop_version}" ;;
-        esac
-        ;;
       rss)
         publish_rss_family "${platform}" "${arch}" "${rss_version}" "${rss_worker_version}"
-        ;;
-      embedding)
-        case "${platform}" in
-          linux) publish_embedding_family_linux "${arch}" "${embedding_version}" "${embedding_worker_version}" ;;
-          macos) publish_embedding_family_macos "${arch}" "${embedding_version}" "${embedding_worker_version}" ;;
-        esac
         ;;
     esac
   done

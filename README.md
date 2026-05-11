@@ -1,19 +1,16 @@
 # Manifeed Workers
 
-Workspace Rust des workers Manifeed. Il regroupe le crate partage, les deux binaires metier
-et l'application desktop qui installe et pilote les workers.
+Workspace Rust du crawler RSS Manifeed. Le worker `crawler_rss` est autonome et porte son CLI,
+son gateway HTTP, sa config locale et son pipeline d'execution.
 
 ## Workspace
 
-- `manifeed-worker-common/` : config persistante, auth worker, checks de release, status local et client gateway HTTP partage
-- `worker-rss/` : worker RSS natif
-- `worker-source-embedding/` : worker d'embeddings
-- `worker-desktop/` : application desktop partagee `Manifeed Workers`
-- `installers/` : packaging Debian/Ubuntu, packaging macOS et outillage de release
+- `crawler_rss/` : crawler RSS natif, utilisable en CLI
+- `installers/` : outillage de release des bundles de crawlers
 
 ## Flux runtime
 
-Les workers metier suivent maintenant un flux unique :
+Le crawler RSS suit le flux gateway :
 
 1. ouvrir une `worker_session`
 2. `claim` une ou plusieurs `worker_tasks`
@@ -23,49 +20,57 @@ Les workers metier suivent maintenant un flux unique :
 
 Points cle :
 
-- le crate `manifeed-worker-common` porte le client gateway partage pour `sessions/open`, `tasks/claim`, `tasks/complete` et `tasks/fail`
+- `crawler_rss` porte localement le client gateway pour `sessions/open`, `tasks/claim`, `tasks/complete` et `tasks/fail`
 - chaque claim backend attribue un `execution_id` distinct du `task_id`
 - `complete` et `fail` sont idempotents cote backend pour un retry identique sur une lease deja finalisee
 - les workers ne parlent ni a PostgreSQL ni a Qdrant directement
-- les status files locaux restent la seule telemetrie runtime partagee avec l'app desktop
+- les status files locaux restent une telemetrie optionnelle pour le diagnostic CLI
 
 ## Experience utilisateur
 
-- Linux distribue un seul paquet `manifeed-workers-desktop_<version>_<arch>.deb`
-- RSS et Embedding sont telecharges, installes, mis a jour et supprimes depuis l'application desktop
-- l'installation nominale demande seulement `api_url` et `api_key`
-- la configuration persistante est stockee dans `workers.json`
-- l'application `manifeed-workers` expose `Installer`, `Scraping` et `Embedding`
-- le mode `Manuel` lance un processus a la demande
-- le mode `Service utilisateur` installe un service OS qui continue sans garder l'application ouverte
-- une mise a jour ou une desinstallation est refusee tant que le worker cible tourne
+- `crawler_rss` se lance directement en CLI avec `crawler_rss run`
+- `crawler_rss set --url ... --api-key ... --concurrency ...` initialise ou met a jour la config locale
+- `crawler_rss update` installe la derniere release GitHub compatible
+- l'installation nominale demande seulement `url`, `api_key` et `concurrency`
+- la configuration persistante du crawler est stockee dans `crawler_rss.json`
 - les status files sont ecrits de maniere coalescee pour limiter l'I/O disque sur le hot path
+- l'embedding n'est plus un worker Rust ; il passe par `embedding_indexer_service`
 
 ## Commandes utiles
 
 ```bash
 cargo fmt --all
-cargo test -p worker-rss
-cargo test -p worker-source-embedding
-cargo build --release -p worker-rss
-cargo build --release -p worker-source-embedding -p worker-desktop
-./installers/release-workers.sh --family desktop
+cargo clippy -p crawler_rss --release --all-targets
+cargo test -p crawler_rss
+cargo build --release -p crawler_rss
 ./installers/release-workers.sh --family rss
-./installers/release-workers.sh --family embedding
-./installers/debian/build-debs.sh
 ```
 
 ## Notes d'architecture
 
 - `dist/` est un artefact genere localement et n'est plus versionne
-- `installers/release-workers.sh` publie dans `../worker_service/var/worker-releases/` et maintient `catalog.json`
-- `installers/release/` centralise les helpers manifests/catalogue et les familles `desktop`, `rss`, `embedding`
+- `installers/release-workers.sh` publie dans `../worker_service/var/worker-releases/` et maintient `catalog.json` (release "interne" backend)
+- `installers/release/` centralise les helpers manifests/catalogue et la famille `rss`
 - chaque architecture peut porter un `artifact_version_<platform>_<arch>` distinct sans changer le `worker_version` backend
-- l'app desktop lit les status files locaux RSS/Embedding et pilote les deux workers avec deux pages distinctes
-- le paquet Debian installe uniquement l'app desktop dans `/usr/lib/manifeed/desktop` avec un wrapper `/usr/bin/manifeed-workers`
 - les bundles workers sont extraits dans `~/.local/share/manifeed/<worker>/current`
-- les familles `desktop`, `rss` et `embedding` sont publiees independamment
+- la famille `rss` publie `crawler_rss_bundle`
 - les bundles, paquets et CLI verifient leur version via `/workers/api/releases/manifest`
-- le desktop se telecharge publiquement ; les bundles RSS et Embedding exigent une API key worker valide
-- le worker d'embeddings telecharge et met en cache les artefacts du modele au besoin
-- la structure et les notes de release de l'app desktop sont documentees dans `worker-desktop/README.md` et `worker-desktop/CHANGELOG.md`
+- le bundle RSS exige une API key worker valide
+
+## Pipeline de release GitHub
+
+Le workflow `.github/workflows/release.yml` produit les bundles publics consommes par `crawler_rss update`.
+
+- declenche : push d'un tag `v*` ou `workflow_dispatch`
+- matrice : linux x86_64, linux aarch64, linux armv7, macos x86_64, macos aarch64, windows x86_64
+- naming des artefacts : `crawler_rss_bundle-<version>-<platform>-<arch>.tar.gz` plus le `.sha256` correspondant
+- toutes les architectures non natives utilisent `cross` (armv7 uniquement) ; `aarch64` Linux est build sur un runner ARM hoste par GitHub
+- chaque tarball contient `bin/crawler_rss[.exe]` strip et un `manifest.json`
+- la verification SHA-256 est obligatoire cote client : un release qui oublie le `.sha256` fera echouer `crawler_rss update`
+
+Couverture Raspberry Pi :
+
+| Modele | OS recommande | Cible Rust | Asset |
+|---|---|---|---|
+| Pi 4 / Pi 5 / Pi 3 (RPi OS 64-bit) | 64-bit | `aarch64-unknown-linux-gnu` | `linux-aarch64` |
+| Pi 2 / Pi 3 / Pi Zero 2 (RPi OS 32-bit) | 32-bit (armv7) | `armv7-unknown-linux-gnueabihf` | `linux-arm` |

@@ -1,0 +1,253 @@
+name: Release crawler_rss bundles
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name to publish (e.g. v0.1.5). Leave empty to use Cargo version."
+        required: false
+        type: string
+      draft:
+        description: "Create the GitHub Release as draft."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  resolve-version:
+    name: Resolve release version
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version from tag or Cargo.toml
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+          elif [[ -n "${{ inputs.tag }}" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            cargo_version=$(grep -m1 '^version' crawler_rss/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+            tag="v${cargo_version}"
+          fi
+          version="${tag#v}"
+          printf 'tag=%s\n' "${tag}" >>"${GITHUB_OUTPUT}"
+          printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
+
+      - name: Verify Cargo.toml matches release version
+        shell: bash
+        run: |
+          cargo_version=$(grep -m1 '^version' crawler_rss/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          if [[ "${cargo_version}" != "${{ steps.version.outputs.version }}" ]]; then
+            echo "::error::Cargo.toml version (${cargo_version}) does not match release version (${{ steps.version.outputs.version }})." >&2
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: resolve-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+            asset_arch: x86_64
+            asset_platform: linux
+            use_cross: false
+
+          - label: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+            asset_arch: aarch64
+            asset_platform: linux
+            use_cross: false
+
+          - label: linux-armv7
+            target: armv7-unknown-linux-gnueabihf
+            runner: ubuntu-22.04
+            asset_arch: arm
+            asset_platform: linux
+            use_cross: true
+
+          - label: macos-x86_64
+            target: x86_64-apple-darwin
+            runner: macos-13
+            asset_arch: x86_64
+            asset_platform: macos
+            use_cross: false
+
+          - label: macos-aarch64
+            target: aarch64-apple-darwin
+            runner: macos-14
+            asset_arch: aarch64
+            asset_platform: macos
+            use_cross: false
+
+          - label: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            runner: windows-2022
+            asset_arch: x86_64
+            asset_platform: windows
+            use_cross: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          workspaces: . -> target
+
+      - name: Install cross (cross-compilation)
+        if: matrix.use_cross
+        shell: bash
+        run: cargo install cross --locked --version 0.2.5
+
+      - name: Build release binary (native)
+        if: ${{ !matrix.use_cross }}
+        shell: bash
+        run: cargo build --release --locked --target ${{ matrix.target }} -p crawler_rss
+
+      - name: Build release binary (cross)
+        if: matrix.use_cross
+        shell: bash
+        run: cross build --release --locked --target ${{ matrix.target }} -p crawler_rss
+
+      - name: Stage bundle (Unix)
+        if: matrix.asset_platform != 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.resolve-version.outputs.version }}"
+          bundle_dir="crawler_rss_bundle-${version}-${{ matrix.asset_arch }}"
+          mkdir -p "dist/${bundle_dir}/bin"
+          install -m 0755 "target/${{ matrix.target }}/release/crawler_rss" "dist/${bundle_dir}/bin/crawler_rss"
+          if command -v strip >/dev/null 2>&1; then
+            strip "dist/${bundle_dir}/bin/crawler_rss" || true
+          fi
+          cat > "dist/${bundle_dir}/manifest.json" <<EOF
+          {
+            "product": "crawler_rss_bundle",
+            "version": "${version}",
+            "worker_version": "${version}"
+          }
+          EOF
+          asset_name="crawler_rss_bundle-${version}-${{ matrix.asset_platform }}-${{ matrix.asset_arch }}.tar.gz"
+          tar -C dist -czf "dist/${asset_name}" "${bundle_dir}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum "${asset_name}" | awk '{print $1}') > "dist/${asset_name}.sha256"
+          else
+            (cd dist && shasum -a 256 "${asset_name}" | awk '{print $1}') > "dist/${asset_name}.sha256"
+          fi
+
+      - name: Stage bundle (Windows)
+        if: matrix.asset_platform == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.resolve-version.outputs.version }}"
+          $bundleDir = "crawler_rss_bundle-${version}-${{ matrix.asset_arch }}"
+          New-Item -ItemType Directory -Force -Path "dist/$bundleDir/bin" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/crawler_rss.exe" "dist/$bundleDir/bin/crawler_rss.exe"
+          @"
+          {
+            "product": "crawler_rss_bundle",
+            "version": "$version",
+            "worker_version": "$version"
+          }
+          "@ | Out-File -Encoding ascii "dist/$bundleDir/manifest.json"
+          $assetName = "crawler_rss_bundle-${version}-${{ matrix.asset_platform }}-${{ matrix.asset_arch }}.tar.gz"
+          tar -C dist -czf "dist/$assetName" "$bundleDir"
+          $sha = (Get-FileHash -Algorithm SHA256 "dist/$assetName").Hash.ToLower()
+          Set-Content -Path "dist/$assetName.sha256" -NoNewline -Value $sha
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.label }}
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: [resolve-version, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: bundle-*
+          merge-multiple: true
+
+      - name: List artifacts
+        shell: bash
+        run: ls -la artifacts/
+
+      - name: Sanity-check asset coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.resolve-version.outputs.version }}"
+          required=(
+            "crawler_rss_bundle-${version}-linux-x86_64.tar.gz"
+            "crawler_rss_bundle-${version}-linux-aarch64.tar.gz"
+            "crawler_rss_bundle-${version}-linux-arm.tar.gz"
+            "crawler_rss_bundle-${version}-macos-x86_64.tar.gz"
+            "crawler_rss_bundle-${version}-macos-aarch64.tar.gz"
+            "crawler_rss_bundle-${version}-windows-x86_64.tar.gz"
+          )
+          missing=0
+          for name in "${required[@]}"; do
+            if [[ ! -f "artifacts/${name}" ]]; then
+              echo "::error::Missing release asset: ${name}" >&2
+              missing=1
+            fi
+            if [[ ! -f "artifacts/${name}.sha256" ]]; then
+              echo "::error::Missing release checksum: ${name}.sha256" >&2
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.tag }}
+          name: ${{ needs.resolve-version.outputs.tag }}
+          draft: ${{ inputs.draft == true }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.tar.gz.sha256
