@@ -26,7 +26,7 @@ pub struct ClaimedRssTask {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct RssSource {
     pub title: String,
-    pub url: String,
+    pub urls: Vec<String>,
     pub summary: Option<String>,
     #[serde(default)]
     pub authors: Vec<String>,

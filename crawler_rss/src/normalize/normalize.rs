@@ -24,14 +24,21 @@ pub fn normalize_sources(
     let mut sources = Vec::new();
 
     for entry in &parsed_feed.entries {
-        let Some(link) = entry
-            .links
-            .iter()
-            .find_map(|link| normalize_required_text(&link.href))
-        else {
+        let mut entry_links: Vec<String> = Vec::new();
+        let mut seen_in_entry: HashSet<String> = HashSet::new();
+        for link in &entry.links {
+            let Some(href) = normalize_required_text(&link.href) else {
+                continue;
+            };
+            if seen_in_entry.insert(href.clone()) {
+                entry_links.push(href);
+            }
+        }
+        if entry_links.is_empty() {
             continue;
-        };
-        if !seen_urls.insert(link.clone()) {
+        }
+        let primary_link = entry_links[0].clone();
+        if !seen_urls.insert(primary_link) {
             continue;
         }
 
@@ -57,7 +64,7 @@ pub fn normalize_sources(
 
         sources.push(RssSource {
             title,
-            url: link,
+            urls: entry_links,
             summary: entry
                 .summary
                 .as_ref()
@@ -112,12 +119,43 @@ mod tests {
 
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0].title, "A useful title");
-        assert_eq!(sources[0].url, "https://example.test/a");
+        assert_eq!(sources[0].urls, vec!["https://example.test/a".to_string()]);
         assert_eq!(sources[0].summary.as_deref(), Some("Hello world"));
         assert_eq!(
             sources[0].published_at,
             Some(Utc.with_ymd_and_hms(2026, 5, 10, 10, 0, 0).unwrap())
         );
         assert!(!sources[0].authors.is_empty());
+    }
+
+    #[test]
+    fn collects_multiple_distinct_links_for_one_entry() {
+        let feed = feed_rs::parser::parse(Cursor::new(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>Example</title>
+              <entry>
+                <title>Multi-link</title>
+                <link href="https://example.test/short" rel="alternate"/>
+                <link href="https://example.test/long/path/article" rel="self"/>
+                <updated>2026-05-10T10:00:00Z</updated>
+              </entry>
+            </feed>"#,
+        ))
+        .unwrap();
+
+        let sources = normalize_sources(
+            &feed,
+            Some(Utc.with_ymd_and_hms(2026, 5, 10, 9, 0, 0).unwrap()),
+        );
+
+        assert_eq!(sources.len(), 1);
+        assert_eq!(
+            sources[0].urls,
+            vec![
+                "https://example.test/short".to_string(),
+                "https://example.test/long/path/article".to_string(),
+            ]
+        );
     }
 }

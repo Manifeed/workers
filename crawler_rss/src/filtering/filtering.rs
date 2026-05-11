@@ -27,7 +27,7 @@ mod tests {
     fn source(url: &str, published_at: Option<DateTime<Utc>>) -> RssSource {
         RssSource {
             title: url.to_string(),
-            url: format!("https://example.test/{url}"),
+            urls: vec![format!("https://example.test/{url}")],
             summary: None,
             authors: Vec::new(),
             published_at,

@@ -1,13 +1,13 @@
 [package]
 name = "crawler_rss"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 
 [package.metadata.manifeed.release]
 family = "rss"
-worker_version = "0.1.6"
-artifact_version_linux_x86_64 = "0.1.6"
-artifact_version_linux_aarch64 = "0.1.6"
+worker_version = "0.1.7"
+artifact_version_linux_x86_64 = "0.1.7"
+artifact_version_linux_aarch64 = "0.1.7"
 
 [dependencies]
 async-trait.workspace = true
