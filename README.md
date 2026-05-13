@@ -34,7 +34,6 @@ Points cle :
 - l'installation nominale demande seulement `url`, `api_key` et `concurrency`
 - la configuration persistante du crawler est stockee dans `crawler_rss.json`
 - les status files sont ecrits de maniere coalescee pour limiter l'I/O disque sur le hot path
-- l'embedding n'est plus un worker Rust ; il passe par `embedding_indexer_service`
 
 ## Commandes utiles
 
