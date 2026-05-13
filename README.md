@@ -1,75 +1,70 @@
 # Manifeed Workers
 
-Workspace Rust du crawler RSS Manifeed. Le worker `crawler_rss` est autonome et porte son CLI,
-son gateway HTTP, sa config locale et son pipeline d'execution.
+Rust workspace for the Manifeed RSS crawler. The `crawler_rss` worker is self-contained and
+ships its own CLI, HTTP gateway client, local configuration, and execution pipeline.
 
 ## Workspace
 
-- `crawler_rss/` : crawler RSS natif, utilisable en CLI
-- `installers/` : outillage de release des bundles de crawlers
+- `crawler_rss/`: native RSS crawler, runnable from the CLI
 
-## Flux runtime
+## Runtime Flow
 
-Le crawler RSS suit le flux gateway :
+The RSS crawler follows the gateway flow:
 
-1. ouvrir une `worker_session`
-2. `claim` une ou plusieurs `worker_tasks`
-3. executer la task localement
-4. envoyer `complete` ou `fail`
-5. nettoyer le state local uniquement apres ack backend
+1. open a `worker_session`
+2. `claim` one or more `worker_tasks`
+3. execute the task locally
+4. send `complete` or `fail`
+5. clean up local state only after backend acknowledgement
 
-Points cle :
+Key points:
 
-- `crawler_rss` porte localement le client gateway pour `sessions/open`, `tasks/claim`, `tasks/complete` et `tasks/fail`
-- chaque claim backend attribue un `execution_id` distinct du `task_id`
-- `complete` et `fail` sont idempotents cote backend pour un retry identique sur une lease deja finalisee
-- les workers ne parlent ni a PostgreSQL ni a Qdrant directement
-- les status files locaux restent une telemetrie optionnelle pour le diagnostic CLI
+- `crawler_rss` includes its own local gateway client for `sessions/open`, `tasks/claim`, `tasks/complete`, and `tasks/fail`
+- each backend claim assigns an `execution_id` that is distinct from the `task_id`
+- `complete` and `fail` are idempotent on the backend side for identical retries on an already finalized lease
+- workers do not talk directly to PostgreSQL or Qdrant
+- local status files remain optional telemetry for CLI diagnostics
 
-## Experience utilisateur
+## User Experience
 
-- `crawler_rss` se lance directement en CLI avec `crawler_rss run`
-- `crawler_rss set --url ... --api-key ... --concurrency ...` initialise ou met a jour la config locale
-- `crawler_rss update` installe la derniere release GitHub compatible
-- l'installation nominale demande seulement `url`, `api_key` et `concurrency`
-- la configuration persistante du crawler est stockee dans `crawler_rss.json`
-- les status files sont ecrits de maniere coalescee pour limiter l'I/O disque sur le hot path
+- `crawler_rss` starts directly from the CLI with `crawler_rss run`
+- `crawler_rss set --url ... --api-key ... --concurrency ...` initializes or updates the local configuration
+- `crawler_rss update` installs the latest compatible GitHub release
+- a standard installation only requires `url`, `api_key`, and `concurrency`
+- persistent crawler configuration is stored in `crawler_rss.json`
+- status files are written in a coalesced way to limit disk I/O on the hot path
 
-## Commandes utiles
+## Useful Commands
 
 ```bash
 cargo fmt --all
 cargo clippy -p crawler_rss --release --all-targets
 cargo test -p crawler_rss
 cargo build --release -p crawler_rss
-./installers/release-workers.sh --family rss
 ```
 
-## Notes d'architecture
+## Architecture Notes
 
-- `dist/` est un artefact genere localement et n'est plus versionne
-- `installers/release-workers.sh` peut encore publier un miroir local sous `../worker_service/var/worker-releases/` (outil interne optionnel ; la prod consomme GitHub)
-- `installers/release/` centralise les helpers manifests/catalogue et la famille `rss`
-- chaque architecture peut porter un `artifact_version_<platform>_<arch>` distinct sans changer le `worker_version` backend
-- les bundles workers sont extraits dans `~/.local/share/manifeed/<worker>/current`
-- la famille `rss` publie `crawler_rss_bundle`
-- les bundles, paquets et CLI verifient leur version via l'API GitHub `releases/latest` du depot `Manifeed/workers`
-- le telechargement du bundle GitHub est public ; `crawler_rss run` exige une cle API worker `rss_scrapper` valide cote gateway
+- `dist/` is a locally generated artifact and is no longer versioned
+- worker bundles are extracted into `~/.local/share/manifeed/<worker>/current`
+- the `rss` family publishes `crawler_rss_bundle`
+- bundles, packages, and the CLI verify their version through the GitHub `releases/latest` API of the `Manifeed/workers` repository
+- GitHub bundle downloads are public; `crawler_rss run` requires a valid `rss_scrapper` worker API key on the gateway side
 
-## Pipeline de release GitHub
+## GitHub Release Pipeline
 
-Le workflow `.github/workflows/release.yml` produit les bundles publics consommes par `crawler_rss update`.
+The `.github/workflows/release.yml` workflow produces the public bundles consumed by `crawler_rss update`.
 
-- declenche : push d'un tag `v*` ou `workflow_dispatch`
-- matrice : linux x86_64, linux aarch64, linux armv7, macos x86_64, macos aarch64, windows x86_64
-- naming des artefacts : `crawler_rss_bundle-<version>-<platform>-<arch>.tar.gz` plus le `.sha256` correspondant
-- toutes les architectures non natives utilisent `cross` (armv7 uniquement) ; `aarch64` Linux est build sur un runner ARM hoste par GitHub
-- chaque tarball contient `bin/crawler_rss[.exe]` strip et un `manifest.json`
-- la verification SHA-256 est obligatoire cote client : un release qui oublie le `.sha256` fera echouer `crawler_rss update`
+- trigger: push of a `v*` tag or `workflow_dispatch`
+- matrix: linux x86_64, linux aarch64, linux armv7, macos x86_64, macos aarch64, windows x86_64
+- artifact naming: `crawler_rss_bundle-<version>-<platform>-<arch>.tar.gz` plus the matching `.sha256`
+- all non-native architectures use `cross` (armv7 only); Linux `aarch64` is built on a GitHub-hosted ARM runner
+- each tarball contains a stripped `bin/crawler_rss[.exe]` and a `manifest.json`
+- SHA-256 verification is mandatory on the client side: a release missing the `.sha256` file will make `crawler_rss update` fail
 
-Couverture Raspberry Pi :
+Raspberry Pi coverage:
 
-| Modele | OS recommande | Cible Rust | Asset |
+| Model | Recommended OS | Rust target | Asset |
 |---|---|---|---|
 | Pi 4 / Pi 5 / Pi 3 (RPi OS 64-bit) | 64-bit | `aarch64-unknown-linux-gnu` | `linux-aarch64` |
 | Pi 2 / Pi 3 / Pi Zero 2 (RPi OS 32-bit) | 32-bit (armv7) | `armv7-unknown-linux-gnueabihf` | `linux-arm` |
