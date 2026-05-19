@@ -1,5 +1,7 @@
 use feed_rs::model::Entry;
 
+const WORKER_IMAGE_URL_MAX_LENGTH: usize = 4000;
+
 pub(super) fn extract_image_url(entry: &Entry) -> Option<String> {
     extract_media_thumbnail_url(entry)
         .or_else(|| extract_media_content_image_url(entry))
@@ -11,8 +13,7 @@ fn extract_media_thumbnail_url(entry: &Entry) -> Option<String> {
         .media
         .iter()
         .flat_map(|media| media.thumbnails.iter())
-        .map(|thumbnail| thumbnail.image.uri.clone())
-        .find(|uri| looks_like_image_url(uri))
+        .find_map(|thumbnail| sanitize_image_url(&thumbnail.image.uri))
 }
 
 fn extract_media_content_image_url(entry: &Entry) -> Option<String> {
@@ -28,7 +29,7 @@ fn extract_media_content_image_url(entry: &Entry) -> Option<String> {
                 .map(|content_type| content_type.as_str().starts_with("image/"))
                 .unwrap_or_else(|| looks_like_image_url(&url))
             {
-                Some(url)
+                sanitize_image_url(&url)
             } else {
                 None
             }
@@ -50,8 +51,7 @@ fn extract_inline_image_url(entry: &Entry) -> Option<String> {
                         content
                             .src
                             .as_ref()
-                            .map(|src| src.href.clone())
-                            .filter(|src| looks_like_image_url(src))
+                            .and_then(|src| sanitize_image_url(&src.href))
                     })
             })
         })
@@ -74,8 +74,16 @@ fn find_first_image_src(html: &str) -> Option<String> {
     }
 
     let decoded = html_escape::decode_html_entities(candidate).into_owned();
-    if looks_like_image_url(&decoded) {
-        Some(decoded)
+    sanitize_image_url(&decoded)
+}
+
+fn sanitize_image_url(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > WORKER_IMAGE_URL_MAX_LENGTH {
+        return None;
+    }
+    if looks_like_image_url(trimmed) {
+        Some(trimmed.to_string())
     } else {
         None
     }
@@ -106,5 +114,13 @@ mod tests {
             ),
             Some("https://cdn.example.com/photo&size=large.jpg".to_string())
         );
+    }
+
+    #[test]
+    fn find_first_image_src_drops_overlong_urls() {
+        let long_path = "a".repeat(4001);
+        let html = format!(r#"<div><img src="https://cdn.example.com/{long_path}.jpg" /></div>"#);
+
+        assert_eq!(find_first_image_src(&html), None);
     }
 }
